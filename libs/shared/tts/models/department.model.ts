@@ -2,7 +2,6 @@ export interface LoginCredentials {
   username: string;
   password?: string;
   rememberMe: boolean;
-  role: 'department' | 'school' | 'teacher' | 'student';
 }
 
 export interface OTPRequest {

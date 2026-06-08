@@ -55,8 +55,8 @@ export const DepartmentLoginScreen: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const response = await login(username.trim(), password);
-      setAuthTokens(response.data.accessToken, response.data.refreshToken);
+      const response = await login(username.trim(), password, rememberMe);
+      setAuthTokens(response.data.accessToken, response.data.refreshToken, response.data.user.id, rememberMe);
       setAlertOpen(false);
       setAlertMsg({
         type: "success",
