@@ -1,7 +1,7 @@
 import type { UserData } from "../components/UserProfile";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010/api/v1";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
 
 const ACCESS_TOKEN_KEY = "vna_access_token";
 const REFRESH_TOKEN_KEY = "vna_refresh_token";
@@ -238,10 +238,11 @@ export async function resetPassword(
   email: string,
   otp: string,
   newPassword: string,
+  confirmPassword: string,
 ) {
   return request<null>("/auth/forgot-password/reset", {
     method: "POST",
-    body: JSON.stringify({ email, otp, newPassword }),
+    body: JSON.stringify({ email, otp, newPassword, confirmPassword }),
   });
 }
 
