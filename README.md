@@ -1,6 +1,6 @@
 # TTS VNA Nhom01 Frontend
 
-Frontend Next.js App Router cho module phong ban.
+Frontend Next.js App Router cho module VNA.
 
 ## Cau truc
 
@@ -10,9 +10,24 @@ Frontend Next.js App Router cho module phong ban.
 - `libs/shared/`: model, type va interface dung chung.
 - `libs/tts/`: source rieng cua project TTS.
 - `public/`: static assets.
-- `src/`: vung mo rong cho hooks, utils, styles hoac types khi can.
 
-## Cai dat
+## Cau hinh API
+
+Backend `backend_vna` dang chay mac dinh o:
+
+```env
+APP_PORT=3000
+GLOBAL_PREFIX=/api/v1
+```
+
+Frontend goi API qua Next.js rewrite de tranh loi CORS khi chay khac port:
+
+```env
+NEXT_PUBLIC_API_URL=/api/v1
+BACKEND_API_URL=http://localhost:3000/api/v1
+```
+
+## Cai dat va chay
 
 ```bash
 cp .env.example .env.local
@@ -21,9 +36,3 @@ npm run dev
 ```
 
 Truy cap `http://localhost:5555`.
-
-Mac dinh FE goi BE qua:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3010/api/v1
-```

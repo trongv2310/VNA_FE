@@ -9,6 +9,7 @@ import { Alert } from "@/libs/core/components/Alert";
 import {
   requestForgotPassword,
   resetPassword,
+  verifyForgotPasswordOtp,
 } from "../../services/api";
 
 type Step = "REQUEST" | "VERIFY_OTP" | "SUCCESS";
@@ -29,7 +30,7 @@ const EyeOffIcon: React.FC = () => (
 export const DepartmentForgotPasswordScreen: React.FC = () => {
   const router = useRouter();
   const [step, setStep] = useState<Step>("REQUEST");
-  const [email, setEmail] = useState("phanthanhtung093@gmail.com");
+  const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -136,9 +137,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
       setOtpError("");
       setAlertMsg({
         type: "success",
-        text: response.data.devOtp
-          ? `Mã OTP thử nghiệm (development): ${response.data.devOtp}`
-          : response.message || "Mã OTP đã được gửi về email của bạn.",
+        text: String(response.message || "Mã OTP đã được gửi về email của bạn."),
       });
     } catch (error) {
       setAlertMsg({
@@ -195,6 +194,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
 
     setIsLoading(true);
     try {
+      await verifyForgotPasswordOtp(email.trim(), otpCode.trim());
       await resetPassword(email.trim(), otpCode.trim(), passwordNew, passwordConfirm);
       setStep("SUCCESS");
     } catch (error) {
@@ -217,9 +217,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
       setOtpCode("");
       setAlertMsg({
         type: "success",
-        text: response.data.devOtp
-          ? `Mã OTP thử nghiệm (development): ${response.data.devOtp}`
-          : response.message || "Mã OTP mới đã được gửi lại.",
+        text: String(response.message || "Mã OTP mới đã được gửi lại."),
       });
     } catch (error) {
       setAlertMsg({

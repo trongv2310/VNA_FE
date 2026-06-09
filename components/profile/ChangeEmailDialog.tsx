@@ -1,12 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert } from "@/libs/core/components/Alert";
-
-const MOCK_OTP = "123456";
+import {
+  sendChangeGmailOtp,
+  updateChangeGmail,
+  verifyChangeGmailOtp,
+} from "@/libs/tts/services/api";
 
 interface ChangeEmailDialogProps {
   currentEmail: string;
+  initialExpiresInSeconds?: number;
   onSave: (newEmail: string) => void;
   onCancel: () => void;
   showToast: (message: string, type: "success" | "error") => void;
@@ -14,6 +18,7 @@ interface ChangeEmailDialogProps {
 
 export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
   currentEmail,
+  initialExpiresInSeconds = 60,
   onSave,
   onCancel,
   showToast,
@@ -21,62 +26,66 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
   const [step, setStep] = useState<"otp" | "newEmail">("otp");
   const [otp, setOtp] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [timeLeft, setTimeLeft] = useState(60); // 60 seconds
+  const [timeLeft, setTimeLeft] = useState(initialExpiresInSeconds);
   const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Countdown timer logic for Step 1
   useEffect(() => {
-    if (step !== "otp") return;
+    if (step !== "otp" || timeLeft <= 0) return;
 
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
+    const interval = window.setInterval(() => {
+      setTimeLeft((prev) => Math.max(prev - 1, 0));
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [step]);
+    return () => window.clearInterval(interval);
+  }, [step, timeLeft]);
 
-  // Format timeLeft (e.g. 60 -> "01:00", 59 -> "00:59")
   const formatTime = (seconds: number) => {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
     return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
 
-  // Resend OTP Action
-  const handleResendOtp = () => {
-    setTimeLeft(60);
-    setOtp("");
+  const handleResendOtp = async () => {
+    if (timeLeft > 0 || isLoading) return;
+
+    setIsLoading(true);
     setErrorMsg("");
-    showToast("Mã OTP mới đã được gửi", "success");
+    try {
+      const response = await sendChangeGmailOtp();
+      setTimeLeft(response.data?.expiresInSeconds || 60);
+      setOtp("");
+      showToast(String(response.message || "Mã OTP mới đã được gửi"), "success");
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể gửi lại mã OTP");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Step 1: Submit OTP Verification
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!otp.trim()) {
-      setErrorMsg("Vui lòng nhập mã OTP");
+    const normalizedOtp = otp.trim();
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      setErrorMsg("OTP phải gồm 6 chữ số");
       return;
     }
 
-    if (otp !== MOCK_OTP) {
-      setErrorMsg("Mã OTP không hợp lệ");
-      return;
-    }
-
-    // Success -> transition to next step
+    setIsLoading(true);
     setErrorMsg("");
-    setStep("newEmail");
+    try {
+      const response = await verifyChangeGmailOtp(normalizedOtp);
+      showToast(String(response.message || "Xác thực OTP thành công"), "success");
+      setStep("newEmail");
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Mã OTP không hợp lệ");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Step 2: Submit New Email Input
-  const handleSaveEmail = (e: React.FormEvent) => {
+  const handleSaveEmail = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedEmail = newEmail.trim();
@@ -86,9 +95,7 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
       return;
     }
 
-    // Basic email format check
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setErrorMsg("Email không hợp lệ");
       return;
     }
@@ -98,106 +105,101 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
       return;
     }
 
-    // Success -> close and trigger parent handlers
-    onSave(trimmedEmail);
-    showToast("Thay đổi email thành công", "success");
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      const response = await updateChangeGmail(trimmedEmail);
+      const savedEmail = response.data?.email || trimmedEmail;
+      onSave(savedEmail);
+      showToast(String(response.message || "Thay đổi email thành công"), "success");
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Không thể thay đổi email");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop overlay */}
       <div
-        onClick={onCancel}
+        onClick={isLoading ? undefined : onCancel}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
       />
 
-      {/* Step 1: OTP Popup */}
       {step === "otp" && (
         <form
           onSubmit={handleVerifyOtp}
-          className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[20px] w-full max-w-[420px] shadow-2xl p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200"
+          className="relative flex w-full max-w-[420px] flex-col gap-5 rounded-[20px] border border-zinc-200/60 bg-white p-6 shadow-2xl dark:border-zinc-800/80 dark:bg-zinc-950"
         >
-          {/* Header */}
           <div className="text-center">
-            <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wide uppercase select-none">
-              THAY ĐỔI EMAIL
+            <h3 className="text-lg font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              Thay đổi email
             </h3>
-            <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
+            <div className="mt-4 text-sm font-medium leading-relaxed text-zinc-500 dark:text-zinc-400">
               Chúng tôi đã gửi mã xác minh qua email cũ
-              <span className="block font-bold text-zinc-800 dark:text-zinc-200 my-1">
+              <span className="my-1 block font-bold text-zinc-800 dark:text-zinc-200">
                 {currentEmail}
               </span>
-              Bạn vui lòng kiểm tra và điền mã xác thực
             </div>
           </div>
 
-          {/* Validation Alert */}
           {errorMsg && (
-            <Alert variant="login" className="py-2.5 px-3.5" onClose={() => setErrorMsg("")}>
+            <Alert variant="login" className="px-3.5 py-2.5" onClose={() => setErrorMsg("")}>
               {errorMsg}
             </Alert>
           )}
 
-          {/* OTP input field */}
-          <div
-            className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center bg-white dark:bg-zinc-950 transition-all w-full
-              ${
-                errorMsg && (errorMsg.includes("OTP") || errorMsg.includes("mã"))
-                  ? "border-red-500 ring-1 ring-red-500"
-                  : "border-zinc-200 dark:border-zinc-800 focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600"
-              }`}
-          >
-            <label
-              className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
-                ${
-                  errorMsg && (errorMsg.includes("OTP") || errorMsg.includes("mã"))
-                    ? "text-red-500"
-                    : "text-zinc-400 dark:text-zinc-500"
-                }`}
-            >
+          <div className="relative flex w-full flex-col justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 transition-all focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600 dark:border-zinc-800 dark:bg-zinc-950">
+            <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-bold text-zinc-400 dark:bg-zinc-950 dark:text-zinc-500">
               OTP <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
+              inputMode="numeric"
+              maxLength={6}
               value={otp}
               onChange={(e) => {
-                setOtp(e.target.value);
-                setErrorMsg("");
+                const value = e.target.value;
+                if (value === "" || /^\d+$/.test(value)) {
+                  setOtp(value);
+                  setErrorMsg("");
+                }
               }}
               placeholder="Ví dụ: 122456"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
+              className="w-full border-0 bg-transparent pb-0.5 pt-2 text-sm font-semibold text-zinc-800 outline-none dark:text-zinc-200"
             />
           </div>
 
-          {/* Countdown timer & Resend code */}
-          <div className="flex flex-col items-center gap-1.5 select-none">
-            <span className="text-blue-600 dark:text-blue-400 font-bold text-base">
+          <div className="flex flex-col items-center gap-1.5">
+            <span className="text-base font-bold text-blue-600 dark:text-blue-400">
               {formatTime(timeLeft)}
             </span>
-            <div className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+            <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
               Chưa nhận được mã?{" "}
               <button
                 type="button"
                 onClick={handleResendOtp}
-                className="text-blue-600 dark:text-blue-400 font-bold hover:underline cursor-pointer focus:outline-none"
+                disabled={timeLeft > 0 || isLoading}
+                className="font-bold text-blue-600 hover:underline disabled:cursor-not-allowed disabled:text-zinc-400 dark:text-blue-400"
               >
                 Gửi lại
               </button>
             </div>
           </div>
 
-          {/* Confirm and Cancel Buttons */}
-          <div className="flex flex-col gap-3.5 mt-1">
+          <div className="mt-1 flex flex-col gap-3.5">
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer focus:outline-none select-none text-center"
+              disabled={isLoading}
+              className="w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-bold text-white shadow-md shadow-blue-500/10 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Xác nhận
+              {isLoading ? "Đang xử lý..." : "Xác nhận"}
             </button>
             <button
               type="button"
+              disabled={isLoading}
               onClick={onCancel}
-              className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-350 font-bold text-sm transition-colors cursor-pointer focus:outline-none select-none text-center"
+              className="text-center text-sm font-bold text-zinc-400 transition-colors hover:text-zinc-600 disabled:cursor-not-allowed"
             >
               Hủy bỏ
             </button>
@@ -205,72 +207,55 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
         </form>
       )}
 
-      {/* Step 2: New Email Popup */}
       {step === "newEmail" && (
         <form
           onSubmit={handleSaveEmail}
-          className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[20px] w-full max-w-[420px] shadow-2xl p-6 flex flex-col gap-5 animate-in zoom-in-95 duration-200"
+          className="relative flex w-full max-w-[420px] flex-col gap-5 rounded-[20px] border border-zinc-200/60 bg-white p-6 shadow-2xl dark:border-zinc-800/80 dark:bg-zinc-950"
         >
-          {/* Header */}
           <div className="text-center">
-            <h3 className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wide uppercase select-none">
-              THAY ĐỔI EMAIL
+            <h3 className="text-lg font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              Thay đổi email
             </h3>
-            <div className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
+            <div className="mt-4 text-sm font-medium leading-relaxed text-zinc-500 dark:text-zinc-400">
               Vui lòng nhập email mới
             </div>
           </div>
 
-          {/* Validation Alert */}
           {errorMsg && (
-            <Alert variant="login" className="py-2.5 px-3.5" onClose={() => setErrorMsg("")}>
+            <Alert variant="login" className="px-3.5 py-2.5" onClose={() => setErrorMsg("")}>
               {errorMsg}
             </Alert>
           )}
 
-          {/* Email input field */}
-          <div
-            className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center bg-white dark:bg-zinc-950 transition-all w-full
-              ${
-                errorMsg && errorMsg.includes("email")
-                  ? "border-red-500 ring-1 ring-red-500"
-                  : "border-zinc-200 dark:border-zinc-800 focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600"
-              }`}
-          >
-            <label
-              className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
-                ${
-                  errorMsg && errorMsg.includes("email")
-                    ? "text-red-500"
-                    : "text-zinc-400 dark:text-zinc-500"
-                }`}
-            >
+          <div className="relative flex w-full flex-col justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 transition-all focus-within:border-blue-600 focus-within:ring-1 focus-within:ring-blue-600 dark:border-zinc-800 dark:bg-zinc-950">
+            <label className="absolute -top-2.5 left-3 bg-white px-1.5 text-[11px] font-bold text-zinc-400 dark:bg-zinc-950 dark:text-zinc-500">
               Email <span className="text-red-500">*</span>
             </label>
             <input
-              type="text"
+              type="email"
               value={newEmail}
               onChange={(e) => {
                 setNewEmail(e.target.value);
                 setErrorMsg("");
               }}
-              placeholder="Ví dụ: phanthanhtung094@gmail.com"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
+              placeholder="Ví dụ: user@gmail.com"
+              className="w-full border-0 bg-transparent pb-0.5 pt-2 text-sm font-semibold text-zinc-800 outline-none dark:text-zinc-200"
             />
           </div>
 
-          {/* Save and Cancel Buttons */}
-          <div className="flex flex-col gap-3.5 mt-1">
+          <div className="mt-1 flex flex-col gap-3.5">
             <button
               type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer focus:outline-none select-none text-center"
+              disabled={isLoading}
+              className="w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-bold text-white shadow-md shadow-blue-500/10 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Lưu
+              {isLoading ? "Đang lưu..." : "Lưu"}
             </button>
             <button
               type="button"
+              disabled={isLoading}
               onClick={onCancel}
-              className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-350 font-bold text-sm transition-colors cursor-pointer focus:outline-none select-none text-center"
+              className="text-center text-sm font-bold text-zinc-400 transition-colors hover:text-zinc-600 disabled:cursor-not-allowed"
             >
               Hủy bỏ
             </button>
