@@ -9,6 +9,7 @@ import {
   changePassword,
   clearAuthTokens,
   getAccessToken,
+  getProfile,
   getStoredUserData,
   mapBackendUserToUserData,
   updateMe,
@@ -63,14 +64,33 @@ export const DepartmentDashboardScreen: React.FC = () => {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setUserData(storedUserData);
-      setInitialUserData(storedUserData);
-      setProfileResetKey((current) => current + 1);
-      setIsLoadingProfile(false);
-    }, 0);
+    // Set initial profile data from cache
+    setUserData(storedUserData);
+    setInitialUserData(storedUserData);
+    setProfileResetKey((current) => current + 1);
+    setIsLoadingProfile(false);
 
-    return () => window.clearTimeout(timer);
+    // Fetch fresh profile data from DB in background
+    let active = true;
+    const fetchFreshProfile = async () => {
+      try {
+        const response = await getProfile();
+        if (active && response.data) {
+          const freshUserData = mapBackendUserToUserData(response.data);
+          setUserData(freshUserData);
+          setInitialUserData(freshUserData);
+          setProfileResetKey((current) => current + 1);
+        }
+      } catch (error) {
+        console.error("Failed to fetch fresh user profile:", error);
+      }
+    };
+
+    fetchFreshProfile();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   const showToastMsg = (message: string, type: "success" | "error") => {

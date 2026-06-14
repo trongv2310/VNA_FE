@@ -233,6 +233,19 @@ export function getStoredUserData() {
   return user ? mapBackendUserToUserData(user) : null;
 }
 
+export async function getProfile() {
+  const response = await request<BackendUser>("/users/me", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+
+  if (response.data) {
+    setStoredBackendUser(response.data);
+  }
+
+  return response;
+}
+
 export async function updateMe(data: UserData) {
   const userId = getUserId();
   if (!userId) {
