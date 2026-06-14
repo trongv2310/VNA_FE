@@ -3,8 +3,9 @@
 import React, { useState, useRef } from "react";
 import { Camera, Save, Calendar, ChevronDown } from "lucide-react";
 import { ChangeEmailDialog } from "@/components/profile/ChangeEmailDialog";
+import { sendChangeGmailOtp } from "@/libs/tts/services/api";
 
-// Mock Data for Provinces and Wards
+// Static options for provinces and wards used by the current UI.
 const PROVINCE_DATA: Record<string, string[]> = {
   "Thành phố Hồ Chí Minh": ["Phường Gò Vấp", "Phường Tân Sơn", "Phường An Nhơn", "Phường Bến Nghé", "Phường 12"],
   "Thành phố Hà Nội": ["Phường Hàng Bạc", "Phường Tràng Tiền", "Phường Dịch Vọng", "Phường Mỹ Đình"],
@@ -42,6 +43,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 }) => {
   const [formData, setFormData] = useState<UserData>({ ...initialData });
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
+  const [changeEmailExpiresInSeconds, setChangeEmailExpiresInSeconds] = useState(60);
+  const [isSendingChangeEmailOtp, setIsSendingChangeEmailOtp] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dobInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +166,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
     onSave(formData);
     setIsChangeEmailOpen(false);
+  };
+
+  const handleOpenChangeEmail = async () => {
+    if (isSendingChangeEmailOtp) return;
+
+    setIsSendingChangeEmailOtp(true);
+    try {
+      const response = await sendChangeGmailOtp();
+      setChangeEmailExpiresInSeconds(response.data?.expiresInSeconds || 60);
+      showToast(String(response.message || "Mã OTP đã được gửi về email hiện tại"), "success");
+      setIsChangeEmailOpen(true);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể gửi OTP đổi email", "error");
+    } finally {
+      setIsSendingChangeEmailOtp(false);
+    }
   };
 
   return (
@@ -401,8 +420,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsChangeEmailOpen(true)}
-                  className="flex-shrink-0 mb-3 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors focus:outline-none cursor-pointer select-none"
+                  onClick={handleOpenChangeEmail}
+                  disabled={isSendingChangeEmailOtp}
+                  className="flex-shrink-0 mb-3 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors focus:outline-none cursor-pointer select-none disabled:cursor-not-allowed disabled:text-zinc-400"
                 >
                   Thay đổi
                 </button>
@@ -488,6 +508,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       {isChangeEmailOpen && (
         <ChangeEmailDialog
           currentEmail={formData.email}
+          initialExpiresInSeconds={changeEmailExpiresInSeconds}
           onSave={(newEmail) => {
             const updatedData = { ...formData, email: newEmail };
             setFormData(updatedData);

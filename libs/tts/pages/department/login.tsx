@@ -8,7 +8,7 @@ import { Card, CardBody } from "@/libs/core/components/Card";
 import { Alert } from "@/libs/core/components/Alert";
 import { LoginAlert } from "@/components/auth/LoginAlert";
 import { Columns, Image as ImageIcon } from "lucide-react";
-import { login, setAuthTokens } from "../../services/api";
+import { login } from "../../services/api";
 
 export const DepartmentLoginScreen: React.FC = () => {
   const router = useRouter();
@@ -56,7 +56,6 @@ export const DepartmentLoginScreen: React.FC = () => {
     setIsLoading(true);
     try {
       const response = await login(username.trim(), password, rememberMe);
-      setAuthTokens(response.data.accessToken, response.data.refreshToken, response.data.user.id, rememberMe);
       setAlertOpen(false);
       setAlertMsg({
         type: "success",

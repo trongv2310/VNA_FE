@@ -4,7 +4,11 @@ import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 interface ChangePasswordProps {
-  onSave: (currentPw: string, newPw: string) => void;
+  onSave: (
+    currentPw: string,
+    newPw: string,
+    confirmPw: string,
+  ) => void | Promise<void>;
   onCancel: () => void;
   showToast: (message: string, type: "success" | "error") => void;
 }
@@ -23,6 +27,7 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -34,8 +39,8 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({
     if (!newPassword) {
       newErrors.newPassword = "Vui lòng nhập mật khẩu mới.";
     } else {
-      if (newPassword.length < 8) {
-        newErrors.newPassword = "Mật khẩu phải chứa ít nhất 8 ký tự.";
+      if (newPassword.length < 6) {
+        newErrors.newPassword = "Mật khẩu phải chứa ít nhất 6 ký tự.";
       }
     }
 
@@ -46,31 +51,39 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
-  const handleSaveClick = (e: React.FormEvent) => {
+  const handleSaveClick = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) {
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
       const firstError =
-        errors.currentPassword || errors.newPassword || errors.confirmPassword || "Vui lòng điền đầy đủ thông tin.";
+        validationErrors.currentPassword ||
+        validationErrors.newPassword ||
+        validationErrors.confirmPassword ||
+        "Vui lòng điền đầy đủ thông tin.";
       showToast(firstError, "error");
       return;
     }
 
-    onSave(currentPassword, newPassword);
-    // Reset fields
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setErrors({});
+    setIsSubmitting(true);
+    try {
+      await onSave(currentPassword, newPassword, confirmPassword);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setErrors({});
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop overlay */}
       <div
-        onClick={onCancel}
+        onClick={isSubmitting ? undefined : onCancel}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
       />
 
@@ -194,15 +207,17 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({
           <button
             type="button"
             onClick={onCancel}
+            disabled={isSubmitting}
             className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-base transition-colors cursor-pointer focus:outline-none select-none"
           >
             Huỷ bỏ
           </button>
           <button
             type="submit"
-            className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer focus:outline-none select-none"
+            disabled={isSubmitting}
+            className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer focus:outline-none select-none disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Lưu
+            {isSubmitting ? "Đang lưu..." : "Lưu"}
           </button>
         </div>
       </form>

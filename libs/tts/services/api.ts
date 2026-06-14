@@ -1,19 +1,21 @@
 import type { UserData } from "../components/UserProfile";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 const ACCESS_TOKEN_KEY = "vna_access_token";
 const REFRESH_TOKEN_KEY = "vna_refresh_token";
 const USER_ID_KEY = "vna_user_id";
+const USER_DATA_KEY = "vna_user_data";
+const REMEMBER_ME_KEY = "vna_remember_me";
 
 export interface ApiResponse<T> {
   success: boolean;
-  code: number;
+  statusCode: number;
   message: string;
   data: T;
-  errors: unknown;
+  error?: string;
   timestamp: string;
+  path: string;
 }
 
 export interface BackendUser {
@@ -43,10 +45,11 @@ interface LoginPayload {
 interface ForgotPasswordPayload {
   email: string;
   expiresInSeconds: number;
-  devOtp?: string;
+  mailMode?: string;
+  messageId?: string | null;
 }
 
-const REMEMBER_ME_KEY = "vna_remember_me";
+type ChangeGmailOtpPayload = ForgotPasswordPayload;
 
 export function getAccessToken() {
   if (typeof window === "undefined") return null;
@@ -58,11 +61,26 @@ export function getUserId() {
   return localStorage.getItem(USER_ID_KEY) || sessionStorage.getItem(USER_ID_KEY);
 }
 
+export function getStoredBackendUser(): BackendUser | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = localStorage.getItem(USER_DATA_KEY) || sessionStorage.getItem(USER_DATA_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as BackendUser;
+  } catch {
+    localStorage.removeItem(USER_DATA_KEY);
+    sessionStorage.removeItem(USER_DATA_KEY);
+    return null;
+  }
+}
+
 export function setAuthTokens(
   accessToken: string,
   refreshToken: string,
   userId?: string | number,
-  rememberMe: boolean = true
+  rememberMe: boolean = true,
 ) {
   if (typeof window === "undefined") return;
 
@@ -74,7 +92,6 @@ export function setAuthTokens(
     }
     localStorage.setItem(REMEMBER_ME_KEY, "true");
 
-    // Clear session storage to avoid duplicate/stale tokens
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     sessionStorage.removeItem(USER_ID_KEY);
@@ -86,10 +103,35 @@ export function setAuthTokens(
     }
     localStorage.setItem(REMEMBER_ME_KEY, "false");
 
-    // Clear local storage to avoid duplicate/stale tokens
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_ID_KEY);
+  }
+}
+
+export function setStoredBackendUser(user: BackendUser, rememberMe?: boolean) {
+  if (typeof window === "undefined") return;
+
+  const shouldRemember =
+    rememberMe ?? localStorage.getItem(REMEMBER_ME_KEY) !== "false";
+
+  if (user.id !== undefined && user.id !== null) {
+    if (shouldRemember) {
+      localStorage.setItem(USER_ID_KEY, String(user.id));
+      sessionStorage.removeItem(USER_ID_KEY);
+    } else {
+      sessionStorage.setItem(USER_ID_KEY, String(user.id));
+      localStorage.removeItem(USER_ID_KEY);
+    }
+  }
+
+  const serialized = JSON.stringify(user);
+  if (shouldRemember) {
+    localStorage.setItem(USER_DATA_KEY, serialized);
+    sessionStorage.removeItem(USER_DATA_KEY);
+  } else {
+    sessionStorage.setItem(USER_DATA_KEY, serialized);
+    localStorage.removeItem(USER_DATA_KEY);
   }
 }
 
@@ -98,23 +140,15 @@ export function clearAuthTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_ID_KEY);
+  localStorage.removeItem(USER_DATA_KEY);
   localStorage.removeItem(REMEMBER_ME_KEY);
   sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_TOKEN_KEY);
   sessionStorage.removeItem(USER_ID_KEY);
+  sessionStorage.removeItem(USER_DATA_KEY);
 }
 
 export function mapBackendUserToUserData(user: BackendUser): UserData {
-  // Store the user id as a side-effect based on rememberMe preference
-  if (user.id !== undefined && user.id !== null && typeof window !== "undefined") {
-    const isRemembered = localStorage.getItem(REMEMBER_ME_KEY) !== "false";
-    if (isRemembered) {
-      localStorage.setItem(USER_ID_KEY, String(user.id));
-    } else {
-      sessionStorage.setItem(USER_ID_KEY, String(user.id));
-    }
-  }
-
   const role = (user.roles || [])
     .map((item) => (typeof item === "string" ? item : item.code || item.name || ""))
     .filter(Boolean)
@@ -136,7 +170,6 @@ export function mapBackendUserToUserData(user: BackendUser): UserData {
   };
 }
 
-// Helper to convert base64 image URL (from FileReader) to File object for FormData upload
 export function dataURLtoFile(dataurl: string, filename: string): File | null {
   if (!dataurl.startsWith("data:")) return null;
   const arr = dataurl.split(",");
@@ -164,14 +197,13 @@ export function mapUserDataToUpdateMe(data: UserData): FormData {
   if (data.address) formData.append("address", data.address);
   formData.append("isActive", String(data.isActive ?? true));
 
-  if (data.avatarUrl) {
-    if (data.avatarUrl.startsWith("data:")) {
-      const file = dataURLtoFile(data.avatarUrl, "avatar.png");
-      if (file) {
-        formData.append("avatar", file);
-      }
+  if (data.avatarUrl?.startsWith("data:")) {
+    const file = dataURLtoFile(data.avatarUrl, "avatar.png");
+    if (file) {
+      formData.append("avatar", file);
     }
   }
+
   return formData;
 }
 
@@ -180,43 +212,68 @@ export async function login(username: string, password: string, rememberMe: bool
     method: "POST",
     body: JSON.stringify({ username, password, rememberMe }),
   });
-  if (response.success && response.data?.user?.id !== undefined && response.data?.user?.id !== null) {
-    if (typeof window !== "undefined") {
-      if (rememberMe) {
-        localStorage.setItem(USER_ID_KEY, String(response.data.user.id));
-        localStorage.setItem(REMEMBER_ME_KEY, "true");
-      } else {
-        sessionStorage.setItem(USER_ID_KEY, String(response.data.user.id));
-        localStorage.setItem(REMEMBER_ME_KEY, "false");
-      }
+
+  if (response.data?.accessToken && response.data?.refreshToken) {
+    setAuthTokens(
+      response.data.accessToken,
+      response.data.refreshToken,
+      response.data.user?.id,
+      rememberMe,
+    );
+    if (response.data.user) {
+      setStoredBackendUser(response.data.user, rememberMe);
     }
   }
+
   return response;
 }
 
-export async function getMe() {
-  return request<BackendUser>("/users/me", {
+export function getStoredUserData() {
+  const user = getStoredBackendUser();
+  return user ? mapBackendUserToUserData(user) : null;
+}
+
+export async function getProfile() {
+  const response = await request<BackendUser>("/users/me", {
+    method: "GET",
     headers: authHeaders(),
   });
+
+  if (response.data) {
+    setStoredBackendUser(response.data);
+  }
+
+  return response;
 }
 
 export async function updateMe(data: UserData) {
-  const userId = getUserId() || "1";
-  return request<BackendUser>(`/users/${userId}`, {
+  const userId = getUserId();
+  if (!userId) {
+    throw new Error("Không tìm thấy user id. Vui lòng đăng nhập lại.");
+  }
+
+  const response = await request<BackendUser>(`/users/${userId}`, {
     method: "PATCH",
     headers: authHeaders(),
     body: mapUserDataToUpdateMe(data),
   });
+
+  if (response.data) {
+    setStoredBackendUser(response.data);
+  }
+
+  return response;
 }
 
 export async function changePassword(
-  currentPassword: string,
+  oldPassword: string,
   newPassword: string,
+  confirmPassword: string,
 ) {
-  return request<null>("/users/me/password", {
+  return request<null>("/auth/change-password", {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ currentPassword, newPassword }),
+    body: JSON.stringify({ oldPassword, newPassword, confirmPassword }),
   });
 }
 
@@ -246,36 +303,85 @@ export async function resetPassword(
   });
 }
 
+export async function sendChangeGmailOtp() {
+  return request<ChangeGmailOtpPayload>("/auth/change-gmail/send-otp", {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
+
+export async function verifyChangeGmailOtp(otp: string) {
+  return request<null>("/auth/change-gmail/verify-otp", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ otp }),
+  });
+}
+
+export async function updateChangeGmail(newEmail: string) {
+  const response = await request<BackendUser>("/auth/change-gmail/update", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ newEmail }),
+  });
+
+  if (response.data) {
+    setStoredBackendUser(response.data);
+  }
+
+  return response;
+}
+
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function joinApiPath(baseUrl: string, path: string) {
+  return `${baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+}
+
+function normalizeMessage(message: unknown) {
+  if (Array.isArray(message)) {
+    return message.filter(Boolean).join("\n");
+  }
+
+  if (typeof message === "string" && message.trim()) {
+    return message;
+  }
+
+  return null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}) {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
 
-  // If the body is FormData, the browser will automatically set the Content-Type
-  // including the boundary. Setting it manually to application/json or anything else will break it.
   if (!(init.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(joinApiPath(API_BASE_URL, path), {
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new Error("Không thể kết nối đến máy chủ. Kiểm tra backend và cấu hình API.");
+  }
 
-  const payload = (await response.json().catch(() => null)) as
-    | ApiResponse<T>
-    | null;
+  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
 
   if (!response.ok || !payload?.success) {
     const message =
-      payload?.message ||
-      (typeof payload?.errors === "string" ? payload.errors : null) ||
-      "Khong the ket noi den may chu";
+      normalizeMessage(payload?.message) ||
+      normalizeMessage(payload?.error) ||
+      `May chu tra ve loi ${response.status}`;
     throw new Error(message);
   }
 
-  return payload;
+  return {
+    ...payload,
+    message: normalizeMessage(payload.message) || "Thành công",
+  };
 }

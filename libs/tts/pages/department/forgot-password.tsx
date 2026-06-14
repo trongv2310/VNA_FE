@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/libs/core/components/Button";
 import { Card, CardBody } from "@/libs/core/components/Card";
 import { Alert } from "@/libs/core/components/Alert";
+import { Columns, Image as ImageIcon } from "lucide-react";
 import {
   requestForgotPassword,
   resetPassword,
+  verifyForgotPasswordOtp,
 } from "../../services/api";
 
 type Step = "REQUEST" | "VERIFY_OTP" | "SUCCESS";
@@ -29,7 +31,7 @@ const EyeOffIcon: React.FC = () => (
 export const DepartmentForgotPasswordScreen: React.FC = () => {
   const router = useRouter();
   const [step, setStep] = useState<Step>("REQUEST");
-  const [email, setEmail] = useState("phanthanhtung093@gmail.com");
+  const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -48,6 +50,23 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
 
   // Redirect Count
   const [redirectCount, setRedirectCount] = useState(5);
+
+  const [layout, setLayout] = useState<"unsplash" | "split">("unsplash");
+
+  // Load layout preference on mount to avoid Next.js hydration mismatch
+  useEffect(() => {
+    const savedLayout = localStorage.getItem("forgot-password-layout") as "unsplash" | "split" | null;
+    if (savedLayout === "unsplash" || savedLayout === "split") {
+      const timer = window.setTimeout(() => setLayout(savedLayout), 0);
+      return () => window.clearTimeout(timer);
+    }
+  }, []);
+
+  const toggleLayout = () => {
+    const nextLayout = layout === "unsplash" ? "split" : "unsplash";
+    setLayout(nextLayout);
+    localStorage.setItem("forgot-password-layout", nextLayout);
+  };
 
   // OTP Countdown Timer
   useEffect(() => {
@@ -136,9 +155,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
       setOtpError("");
       setAlertMsg({
         type: "success",
-        text: response.data.devOtp
-          ? `Mã OTP thử nghiệm (development): ${response.data.devOtp}`
-          : response.message || "Mã OTP đã được gửi về email của bạn.",
+        text: String(response.message || "Mã OTP đã được gửi về email của bạn."),
       });
     } catch (error) {
       setAlertMsg({
@@ -195,6 +212,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
 
     setIsLoading(true);
     try {
+      await verifyForgotPasswordOtp(email.trim(), otpCode.trim());
       await resetPassword(email.trim(), otpCode.trim(), passwordNew, passwordConfirm);
       setStep("SUCCESS");
     } catch (error) {
@@ -217,9 +235,7 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
       setOtpCode("");
       setAlertMsg({
         type: "success",
-        text: response.data.devOtp
-          ? `Mã OTP thử nghiệm (development): ${response.data.devOtp}`
-          : response.message || "Mã OTP mới đã được gửi lại.",
+        text: String(response.message || "Mã OTP mới đã được gửi lại."),
       });
     } catch (error) {
       setAlertMsg({
@@ -231,19 +247,72 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
     }
   };
 
-  return (
-    <div
-      className="min-h-screen w-full flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative font-sans"
-      style={{
-        backgroundImage: "url('/images/marina-lobato-kG7pOXbBfNs-unsplash.jpg')",
-      }}
-    >
-      <div className="absolute inset-0 bg-slate-900/10 pointer-events-none"></div>
+  const isUnsplash = layout === "unsplash";
 
-      <div className="w-full max-w-[500px] z-10 animate-fade-in p-4">
+  return (
+    <div className="min-h-screen w-full font-sans relative flex flex-col md:flex-row bg-white overflow-hidden">
+      {/* Unsplash Background Image Layer */}
+      <div
+        className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-500 ease-in-out z-0 ${
+          isUnsplash ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        style={{
+          backgroundImage: "url('/images/marina-lobato-kG7pOXbBfNs-unsplash.jpg')",
+        }}
+      />
+
+      {/* Dark overlay for Unsplash background */}
+      <div
+        className={`absolute inset-0 bg-slate-900/10 pointer-events-none transition-opacity duration-500 ease-in-out z-0 ${
+          isUnsplash ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      {/* Floating Toggle Button */}
+      <div className="absolute top-4 right-4 z-50">
+        <button
+          type="button"
+          onClick={toggleLayout}
+          className="flex items-center gap-2 px-3 py-2 rounded-full border shadow-md transition-all duration-300 cursor-pointer text-xs font-semibold bg-white border-zinc-200 text-zinc-700 hover:bg-white hover:text-zinc-950 hover:shadow-lg active:scale-95 select-none"
+        >
+          {isUnsplash ? (
+            <>
+              <Columns className="w-4 h-4 text-[#2563eb]" />
+              <span>Giao diện chia đôi</span>
+            </>
+          ) : (
+            <>
+              <ImageIcon className="w-4 h-4 text-[#2563eb]" />
+              <span>Giao diện ảnh nền</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Left side illustration for split layout */}
+      <div
+        className={`hidden md:flex items-center justify-center bg-white transition-all duration-500 ease-in-out overflow-hidden z-10 ${
+          isUnsplash ? "w-0 opacity-0 pointer-events-none" : "w-1/2 lg:w-7/12 opacity-100"
+        }`}
+      >
+        <div className="max-w-[620px] w-[90%] flex flex-col items-center justify-center transition-all duration-500">
+          <img
+            src="/icons/login.png"
+            alt="Login Illustration"
+            className="w-full h-auto max-h-[75vh] object-contain select-none"
+          />
+        </div>
+      </div>
+
+      {/* Right/Centered side containing the forgot-password card */}
+      <div
+        className={`flex items-center justify-center p-6 sm:p-12 z-10 transition-all duration-500 ease-in-out ${
+          isUnsplash ? "w-full" : "w-full md:w-1/2 lg:w-5/12 bg-white"
+        }`}
+      >
         <Card
           glassmorphism={false}
-          className="!rounded-2xl border border-zinc-200 shadow-xl !bg-white !text-zinc-900"
+          className="!rounded-3xl border border-zinc-200/80 dark:border-zinc-200/80 shadow-2xl !bg-white !text-zinc-900 w-full max-w-[500px] animate-slide-up-fade"
         >
           <CardBody className="p-8 md:p-10 flex flex-col gap-6 items-center">
 
