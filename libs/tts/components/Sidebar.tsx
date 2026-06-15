@@ -2,22 +2,17 @@
 
 import React, { useState } from "react";
 import {
-  BookOpen,
-  Home,
   Settings,
-  HardDrive,
-  GraduationCap,
-  Building2,
-  BarChart3,
   ChevronDown,
   Menu,
+  ShieldAlert,
 } from "lucide-react";
 import { UserMenu } from "./UserMenu";
 
 interface SidebarProps {
   fullName: string;
   avatarUrl: string;
-  onSelectView: (view: "profile" | "change-password") => void;
+  onSelectView: (view: "profile" | "change-password" | "user-management") => void;
   onLogout: () => void;
   activeItem?: string;
   onCloseMobile?: () => void;
@@ -41,9 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Toggle state for accordion menus
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
     he_thong: true, // Default open as "Quản lý người dùng" is inside
-    quan_ly_phan_mem: false,
-    chuan_nghe_nghiep_gv: false,
-    chuan_nghe_nghiep_ht_hp: false,
+    tai_nan_lao_dong: false,
   });
 
   const toggleMenu = (menuId: string) => {
@@ -55,56 +48,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuItems: MenuItem[] = [
     {
-      id: "huong_dan",
-      label: "Hướng dẫn sử dụng",
-      icon: <BookOpen className="w-5 h-5 flex-shrink-0" />,
-    },
-    {
-      id: "trang_chu",
-      label: "Trang chủ",
-      icon: <Home className="w-5 h-5 flex-shrink-0" />,
-    },
-    {
       id: "he_thong",
       label: "Hệ thống",
       icon: <Settings className="w-5 h-5 flex-shrink-0" />,
       children: [
         { id: "quan_ly_nguoi_dung", label: "Quản lý người dùng" },
-        { id: "vai_tro_nguoi_dung", label: "Vai trò người dùng" },
-        { id: "tiep_nhan", label: "Tiếp nhận" },
+        { id: "quan_ly_doanh_nghiep", label: "Quản lý doanh nghiệp" },
+        { id: "ky_bao_cao", label: "Kỳ báo cáo" },
       ],
     },
     {
-      id: "quan_ly_phan_mem",
-      label: "Quản lý phần mềm",
-      icon: <HardDrive className="w-5 h-5 flex-shrink-0" />,
+      id: "tai_nan_lao_dong",
+      label: "Tai nạn lao động",
+      icon: <ShieldAlert className="w-5 h-5 flex-shrink-0" />,
       children: [
-        { id: "ds_phan_mem", label: "Danh sách phần mềm" },
-        { id: "phat_hanh", label: "Phát hành phiên bản" },
+        { id: "danh_muc_chung", label: "Danh mục chung" },
+        { id: "tnld_theo_hdld", label: "TNLĐ theo HĐLĐ" },
       ],
-    },
-    {
-      id: "chuan_nghe_nghiep_gv",
-      label: "Chuẩn nghề nghiệp giáo viên",
-      icon: <GraduationCap className="w-5 h-5 flex-shrink-0" />,
-      children: [
-        { id: "tieu_chi_gv", label: "Tiêu chí đánh giá" },
-        { id: "minh_chung_gv", label: "Minh chứng" },
-      ],
-    },
-    {
-      id: "chuan_nghe_nghiep_ht_hp",
-      label: "Chuẩn nghề nghiệp HT - HP",
-      icon: <Building2 className="w-5 h-5 flex-shrink-0" />,
-      children: [
-        { id: "tieu_chi_ht", label: "Tiêu chí Hiệu trưởng" },
-        { id: "tieu_chi_hp", label: "Tiêu chí Hiệu phó" },
-      ],
-    },
-    {
-      id: "bao_cao",
-      label: "Báo cáo thống kê",
-      icon: <BarChart3 className="w-5 h-5 flex-shrink-0" />,
     },
   ];
 
@@ -126,7 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Uỷ ban nhân dân
             </h1>
             <p className="text-[11px] text-[#93c5fd] font-semibold uppercase">
-              Tỉnh ABC
+              Thành phố Hồ Chí Minh
             </p>
           </div>
         </div>
@@ -168,11 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 // Single Direct Link
                 <button
                   type="button"
-                  onClick={() => {
-                    if (item.id === "trang_chu" || item.id === "huong_dan") {
-                      onSelectView("profile");
-                    }
-                  }}
                   className={`w-full flex items-center gap-3.5 px-3.5 py-3 rounded-xl transition-all text-left font-medium text-sm focus:outline-none focus:ring-1 focus:ring-white/15 cursor-pointer
                     ${
                       activeItem === item.id
@@ -197,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         type="button"
                         onClick={() => {
                           if (child.id === "quan_ly_nguoi_dung") {
-                            onSelectView("profile");
+                            onSelectView("user-management");
                           }
                         }}
                         className={`w-full flex items-center px-4 py-2 text-xs rounded-lg transition-all text-left font-medium cursor-pointer
