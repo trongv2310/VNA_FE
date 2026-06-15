@@ -514,3 +514,154 @@ async function request<T>(path: string, init: RequestInit = {}) {
     message: normalizeMessage(payload.message) || "Thành công",
   };
 }
+
+export interface BusinessAttachment {
+  id: number;
+  displayName: string;
+  originalName: string;
+  fileUrl: string;
+  mimetype: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface BusinessListItem {
+  id: number;
+  businessName: string;
+  foreignName?: string | null;
+  taxCode: string;
+  businessType: string;
+  industryCode: string;
+  industryName: string;
+  industryDisplay: string;
+  licenseIssueDate?: string | null;
+  provinceCity: string;
+  wardCommune: string;
+  address?: string | null;
+  email?: string | null;
+  agencyPhone?: string | null;
+  operatingProvinceCity?: string | null;
+  operatingWardCommune?: string | null;
+  businessLocation?: string | null;
+  representativeName?: string | null;
+  representativePhone?: string | null;
+  isActive: boolean;
+  statusLabel: string;
+  attachments: BusinessAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  accountUserId?: number | null;
+  accountUsername?: string | null;
+  accountInfo?: {
+    username: string;
+    password: string;
+  };
+}
+
+export interface BusinessListMeta {
+  page: number;
+  limit: number;
+  totalItems: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface BusinessListResponse {
+  items: BusinessListItem[];
+  meta: BusinessListMeta;
+}
+
+export interface BusinessOptionsResponse {
+  businessTypes: string[];
+  taxCodeRules: {
+    format: string;
+    examples: string[];
+  };
+  industryLevel: number;
+  industryCodeRule: string;
+}
+
+export async function getBusinesses(query?: {
+  page?: number | string;
+  limit?: number | string;
+  keyword?: string;
+  businessName?: string;
+  taxCode?: string;
+  businessType?: string;
+  industryCode?: string;
+  industryName?: string;
+  wardCommune?: string;
+  isActive?: string;
+}) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/businesses${queryString ? `?${queryString}` : ""}`;
+  return request<BusinessListResponse>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function getBusinessOptions() {
+  return request<BusinessOptionsResponse>("/businesses/options", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function getBusinessDetail(id: number | string) {
+  return request<BusinessListItem>(`/businesses/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function createBusiness(formData: FormData) {
+  return request<BusinessListItem>("/businesses", {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+}
+
+export async function updateBusiness(id: number | string, formData: FormData) {
+  return request<BusinessListItem>(`/businesses/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: formData,
+  });
+}
+
+export async function updateBusinessStatus(id: number | string, isActive: boolean) {
+  return request<BusinessListItem>(`/businesses/${id}/status`, {
+    method: "PATCH",
+    headers: {
+      ...authHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ isActive }),
+  });
+}
+
+export async function deleteBusiness(id: number | string) {
+  return request<{ id: number }>(`/businesses/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteBusinessAttachment(businessId: number | string, attachmentId: number | string) {
+  return request<{ id: number }>(`/businesses/${businessId}/attachments/${attachmentId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+

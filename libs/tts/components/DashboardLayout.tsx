@@ -17,7 +17,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   setMobileMenuOpen,
 }) => {
   return (
-    <div className="min-h-screen w-full flex bg-white dark:bg-zinc-950 font-sans transition-colors duration-300">
+    <div className="h-screen w-full flex bg-white dark:bg-zinc-950 font-sans transition-colors duration-300 overflow-hidden">
 
       {/* 1. Desktop Sidebar (always visible on screens lg and above) */}
       <aside className="hidden lg:flex flex-shrink-0 h-screen sticky top-0">
@@ -47,7 +47,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
 
       {/* 3. Main Workspace Area (takes remaining space) */}
-      <div className="flex-1 flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
 
         {/* Mobile Top Header (only visible on mobile/tablet screens < lg) */}
         <header className="lg:hidden w-full flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-200/50 dark:border-zinc-800/80 shadow-sm z-30 select-none">
