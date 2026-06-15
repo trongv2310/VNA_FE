@@ -454,6 +454,13 @@ export async function createUser(
   });
 }
 
+export async function getUserDetail(id: number | string) {
+  return request<BackendUser>(`/users/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
