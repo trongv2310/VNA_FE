@@ -32,6 +32,8 @@ export interface BackendUser {
   address?: string;
   isActive?: boolean;
   roles?: Array<string | { code?: string; name?: string }>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface LoginPayload {
@@ -330,6 +332,133 @@ export async function updateChangeGmail(newEmail: string) {
   }
 
   return response;
+}
+
+export interface UserListMeta {
+  page: number;
+  limit: number;
+  totalItems: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
+export interface UserListItem {
+  id: number;
+  fullName: string;
+  username: string;
+  email: string;
+  avatar: string | null;
+  position: string;
+  isActive: boolean;
+  statusLabel: string;
+  roles: Array<{ id: number; code: string; name: string }>;
+  roleCodes: string[];
+  roleNames: string[];
+  roleDisplay: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserListResponse {
+  items: UserListItem[];
+  meta: UserListMeta;
+}
+
+export async function getUsers(query?: {
+  page?: number | string;
+  limit?: number | string;
+  keyword?: string;
+  fullName?: string;
+  username?: string;
+  email?: string;
+  role?: string;
+  position?: string;
+  isActive?: string;
+}) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/users${queryString ? `?${queryString}` : ""}`;
+  return request<UserListResponse>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function updateUserAdmin(
+  id: number | string,
+  data: Partial<BackendUser> & { roleCode?: string; password?: string },
+) {
+  const formData = new FormData();
+  if (data.username !== undefined) formData.append("username", data.username);
+  if (data.password !== undefined) formData.append("password", data.password);
+  if (data.fullName !== undefined) formData.append("fullName", data.fullName);
+  if (data.email !== undefined) formData.append("email", data.email);
+  if (data.gender !== undefined) formData.append("gender", data.gender);
+  if (data.dateOfBirth !== undefined) formData.append("dateOfBirth", data.dateOfBirth);
+  if (data.position !== undefined) formData.append("position", data.position);
+  if (data.roleCode !== undefined) formData.append("roleCode", data.roleCode);
+  if (data.isActive !== undefined) formData.append("isActive", String(data.isActive));
+  
+  if (data.avatar?.startsWith("data:")) {
+    const file = dataURLtoFile(data.avatar, "avatar.png");
+    if (file) {
+      formData.append("avatar", file);
+    }
+  } else if (data.avatar === null) {
+    formData.append("removeAvatar", "true");
+  }
+
+  return request<BackendUser>(`/users/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: formData,
+  });
+}
+
+export async function createUser(
+  data: Partial<BackendUser> & { roleCode?: string; password?: string; provinceCity?: string; wardCommune?: string },
+) {
+  const formData = new FormData();
+  if (data.username !== undefined) formData.append("username", data.username);
+  if (data.password !== undefined) formData.append("password", data.password);
+  if (data.fullName !== undefined) formData.append("fullName", data.fullName);
+  if (data.email !== undefined) formData.append("email", data.email);
+  if (data.gender !== undefined) formData.append("gender", data.gender);
+  if (data.dateOfBirth !== undefined) formData.append("dateOfBirth", data.dateOfBirth);
+  if (data.position !== undefined) formData.append("position", data.position);
+  if (data.roleCode !== undefined) formData.append("roleCode", data.roleCode);
+  if (data.isActive !== undefined) formData.append("isActive", String(data.isActive));
+  if (data.provinceCity !== undefined) formData.append("provinceCity", data.provinceCity);
+  if (data.wardCommune !== undefined) formData.append("wardCommune", data.wardCommune);
+  if (data.address !== undefined) formData.append("address", data.address);
+  
+  if (data.avatar?.startsWith("data:")) {
+    const file = dataURLtoFile(data.avatar, "avatar.png");
+    if (file) {
+      formData.append("avatar", file);
+    }
+  }
+
+  return request<BackendUser>("/users", {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+}
+
+export async function getUserDetail(id: number | string) {
+  return request<BackendUser>(`/users/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 function authHeaders(): Record<string, string> {

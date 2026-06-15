@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, LogOut, X } from "lucide-react";
-import { ChangePassword, DashboardLayout, Sidebar, UserProfile } from "../../components";
+import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement } from "../../components";
 import type { UserData } from "../../components/UserProfile";
 import {
   changePassword,
@@ -37,7 +37,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
   const [initialUserData, setInitialUserData] = useState<UserData>(EMPTY_USER_DATA);
   const [profileResetKey, setProfileResetKey] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [activeView, setActiveView] = useState<"profile" | "change-password">("profile");
+  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management">("profile");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -69,6 +69,10 @@ export const DepartmentDashboardScreen: React.FC = () => {
     setInitialUserData(storedUserData);
     setProfileResetKey((current) => current + 1);
     setIsLoadingProfile(false);
+
+    if (storedUserData.role.includes("ADMIN")) {
+      setActiveView("user-management");
+    }
 
     // Fetch fresh profile data from DB in background
     let active = true;
@@ -152,7 +156,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
         setMobileMenuOpen(false);
       }}
       onLogout={() => setShowLogoutConfirm(true)}
-      activeItem={activeView === "profile" ? "quan_ly_nguoi_dung" : ""}
+      activeItem={activeView === "user-management" ? "quan_ly_nguoi_dung" : ""}
       onCloseMobile={() => setMobileMenuOpen(false)}
     />
   );
@@ -161,24 +165,28 @@ export const DepartmentDashboardScreen: React.FC = () => {
     <div className="relative h-screen w-screen overflow-hidden">
       {toast && (
         <div
-          className={`fixed top-6 right-6 z-50 flex items-center gap-3 rounded-xl border bg-white px-5 py-4 text-sm font-semibold shadow-2xl dark:bg-zinc-900 ${
+          className={`fixed top-6 left-1/2 z-50 flex items-center gap-4 rounded-xl px-5 py-3.5 text-sm font-semibold shadow-lg border select-none transition-all animate-in fade-in slide-in-from-top-4 duration-300 w-[min(480px,calc(100vw-32px))] -translate-x-1/2 ${
             toast.type === "success"
-              ? "border-emerald-200/80 text-emerald-800 dark:border-emerald-900/40 dark:text-emerald-300"
-              : "border-red-200/80 text-red-800 dark:border-red-900/40 dark:text-red-300"
+              ? "bg-[#e9ffd7] text-[#147a22] border-[#c2f0a5]"
+              : "bg-red-50 text-red-800 border-red-100"
           }`}
         >
           {toast.type === "success" ? (
-            <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+            <CheckCircle2 className="h-5 w-5 flex-shrink-0 rounded-full bg-[#52d934] text-white" />
           ) : (
-            <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-500" />
+            <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-500 fill-white" />
           )}
-          <span className="pr-4">{toast.message}</span>
+          <span className="flex-1 pr-2">{toast.message}</span>
           <button
             type="button"
             onClick={() => setToast(null)}
-            className="rounded-lg p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+            className={`rounded-lg p-1 transition-colors ${
+              toast.type === "success"
+                ? "text-[#0f5132] hover:bg-black/5"
+                : "text-red-800 hover:bg-black/5"
+            }`}
           >
-            <X className="h-4 w-4" />
+            <X className="h-4.5 w-4.5 stroke-[2.5]" />
           </button>
         </div>
       )}
@@ -229,13 +237,17 @@ export const DepartmentDashboardScreen: React.FC = () => {
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
         >
-          <UserProfile
-            key={profileResetKey}
-            initialData={userData}
-            onSave={handleSaveProfile}
-            onCancel={handleCancelProfile}
-            showToast={showToastMsg}
-          />
+          {activeView === "user-management" ? (
+            <UserManagement showToast={showToastMsg} />
+          ) : (
+            <UserProfile
+              key={profileResetKey}
+              initialData={userData}
+              onSave={handleSaveProfile}
+              onCancel={handleCancelProfile}
+              showToast={showToastMsg}
+            />
+          )}
         </DashboardLayout>
       )}
 
