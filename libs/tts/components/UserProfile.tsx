@@ -74,10 +74,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
   const handleSelectChange = (name: keyof UserData, value: string) => {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
-      // If province changes, automatically update ward to the first one in list or empty
+      // If province changes, reset ward
       if (name === "province") {
-        const wards = PROVINCE_DATA[value] || [];
-        updated.ward = wards.length > 0 ? wards[0] : "";
+        updated.ward = "";
       }
       return updated;
     });
@@ -223,7 +222,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           />
 
           {/* Avatar circle */}
-          <div 
+          <div
             onClick={handleAvatarClick}
             className="group relative w-36 h-36 rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 overflow-hidden"
           >
@@ -320,7 +319,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
 
               {/* DoB Datepicker */}
-              <div 
+              <div
                 onClick={handleCalendarClick}
                 className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 cursor-pointer"
               >
@@ -459,7 +458,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
 
               {/* Ward Dropdown Select */}
-              <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
+              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center bg-white dark:bg-zinc-950 focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 transition-all ${!formData.province ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
                 <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
                   Phường xã
                 </label>
@@ -468,11 +467,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     name="ward"
                     value={formData.ward}
                     onChange={(e) => handleSelectChange("ward", e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0"
+                    className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none pr-8 focus:ring-0 ${!formData.province ? "cursor-not-allowed" : "cursor-pointer"}`}
                     disabled={!formData.province}
                   >
                     {!formData.province ? (
-                      <option value="">Chọn Tỉnh/Thành phố trước</option>
+                      <option value="">Vui lòng chọn Tỉnh/Thành phố trước</option>
                     ) : (
                       <>
                         <option value="">Chọn phường/ xã</option>

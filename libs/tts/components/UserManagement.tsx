@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getUsers, updateUserAdmin, createUser, type UserListItem, type UserListMeta } from "../services/api";
 import { CreateUser } from "./CreateUser";
+import { ResetPasswordModal } from "./ResetPasswordModal";
 
 interface UserManagementProps {
   showToast: (message: string, type: "success" | "error") => void;
@@ -480,8 +481,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
       {/* Reset Password Modal Dialog */}
       {passwordResetUser && (
         <ResetPasswordModal
-          user={passwordResetUser}
-          onSave={handleSavePasswordReset}
+          username={passwordResetUser.username}
+          onSave={async (pw) => {
+            try {
+              const response = await updateUserAdmin(passwordResetUser.id, {
+                password: pw,
+              });
+              if (response.success) {
+                showToast("Đổi mật khẩu thành công.", "success");
+                handleSavePasswordReset();
+              } else {
+                throw new Error(response.message || "Đặt lại mật khẩu thất bại");
+              }
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : "Đặt lại mật khẩu thất bại", "error");
+              throw error;
+            }
+          }}
           onCancel={() => setPasswordResetUser(null)}
           showToast={showToast}
         />
@@ -683,97 +699,4 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onSave, onCancel, s
   );
 };
 
-// ==========================================
-// Reset Password Modal Component
-// ==========================================
-interface ResetPasswordModalProps {
-  user: UserListItem;
-  onSave: () => void;
-  onCancel: () => void;
-  showToast: (message: string, type: "success" | "error") => void;
-}
 
-const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ user, onSave, onCancel, showToast }) => {
-  const [newPassword, setNewPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPassword.trim()) {
-      showToast("Vui lòng nhập mật khẩu mới", "error");
-      return;
-    }
-    if (newPassword.trim().length < 6) {
-      showToast("Mật khẩu mới phải từ 6 ký tự trở lên", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await updateUserAdmin(user.id, {
-        password: newPassword.trim(),
-      });
-
-      if (response.success) {
-        showToast("Đặt lại mật khẩu thành công", "success");
-        onSave();
-      } else {
-        throw new Error(response.message || "Đặt lại mật khẩu thất bại");
-      }
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Đặt lại mật khẩu thất bại", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div onClick={isSubmitting ? undefined : onCancel} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <form
-        onSubmit={handleSubmit}
-        className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[20px] w-full max-w-[420px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
-      >
-        <div className="bg-blue-600 dark:bg-blue-700 text-white py-4 text-center font-bold text-lg select-none tracking-wide">
-          Xác nhận
-        </div>
-
-        <div className="p-6 flex flex-col gap-4">
-          <p className="text-zinc-850 dark:text-zinc-150 text-sm font-semibold select-none">
-            Khởi tạo mật khẩu cho tài khoản <strong className="font-extrabold">{user.username}</strong>
-          </p>
-
-          <input
-            type="password"
-            className="w-full text-xs px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 focus:border-blue-500 transition-colors"
-            placeholder="Nhập mật khẩu mới mong muốn"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-5 px-6 pb-6 select-none text-xs font-bold">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className="text-blue-600 hover:text-blue-700 font-bold transition-colors cursor-pointer focus:outline-none"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current stroke-2">
-              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-              <path d="M17 21v-8H7v8M7 3v5h8" />
-            </svg>
-            <span>{isSubmitting ? "Đang lưu..." : "Lưu"}</span>
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-};

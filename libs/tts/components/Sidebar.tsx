@@ -12,7 +12,7 @@ import { UserMenu } from "./UserMenu";
 interface SidebarProps {
   fullName: string;
   avatarUrl: string;
-  onSelectView: (view: "profile" | "change-password" | "user-management") => void;
+  onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management") => void;
   onLogout: () => void;
   activeItem?: string;
   onCloseMobile?: () => void;
@@ -153,6 +153,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={() => {
                           if (child.id === "quan_ly_nguoi_dung") {
                             onSelectView("user-management");
+                          } else if (child.id === "quan_ly_doanh_nghiep") {
+                            onSelectView("enterprise-management");
                           }
                         }}
                         className={`w-full flex items-center px-4 py-2 text-xs rounded-lg transition-all text-left font-medium cursor-pointer
