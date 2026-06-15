@@ -86,8 +86,8 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
     }
 
     let score = 0;
-    if (passwordNew.length >= 6) score += 1;
-    if (passwordNew.length >= 10) score += 1;
+    if (passwordNew.length >= 8) score += 1;
+    if (passwordNew.length >= 12) score += 1;
     if (/[A-Z]/.test(passwordNew)) score += 1;
     if (/[0-9]/.test(passwordNew)) score += 1;
     if (/[^A-Za-z0-9]/.test(passwordNew)) score += 1;
@@ -181,9 +181,21 @@ export const DepartmentForgotPasswordScreen: React.FC = () => {
     if (!passwordNew) {
       errors.new = "Vui lòng nhập mật khẩu mới.";
       hasError = true;
-    } else if (passwordNew.length < 6) {
-      errors.new = "Mật khẩu phải chứa ít nhất 6 ký tự.";
-      hasError = true;
+    } else {
+      const pw = passwordNew.trim();
+      const hasUpper = /[A-Z]/.test(pw);
+      const hasLower = /[a-z]/.test(pw);
+      const hasDigit = /[0-9]/.test(pw);
+      const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+      const matchedFactors = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+
+      if (pw.length < 8) {
+        errors.new = "Mật khẩu phải chứa ít nhất 8 ký tự.";
+        hasError = true;
+      } else if (matchedFactors < 3) {
+        errors.new = "Mật khẩu phải chứa ít nhất 3 trong 4 yếu tố: chữ viết hoa, chữ viết thường, chữ số, ký tự đặc biệt.";
+        hasError = true;
+      }
     }
 
     if (!passwordConfirm) {

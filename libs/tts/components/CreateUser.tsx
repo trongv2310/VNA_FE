@@ -19,7 +19,7 @@ export const CreateUser: React.FC<CreateUserProps> = ({ onSave, onCancel, showTo
   const [formData, setFormData] = useState({
     avatarUrl: "",
     username: "",
-    password: "",
+    password: "12345678",
     fullName: "",
     dob: "",
     gender: "",
@@ -116,11 +116,34 @@ export const CreateUser: React.FC<CreateUserProps> = ({ onSave, onCancel, showTo
     if (!formData.username.trim()) {
       newErrors.username = "Tên đăng nhập không được để trống.";
     }
-    if (!formData.password.trim()) {
+
+    const pw = formData.password.trim();
+    if (!pw) {
       newErrors.password = "Mật khẩu không được để trống.";
-    } else if (formData.password.trim().length < 6) {
-      newErrors.password = "Mật khẩu phải từ 6 ký tự trở lên.";
+    } else if (pw !== "12345678") {
+      const hasUpper = /[A-Z]/.test(pw);
+      const hasLower = /[a-z]/.test(pw);
+      const hasDigit = /[0-9]/.test(pw);
+      const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+      const matchedFactors = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+
+      if (pw.length < 8) {
+        newErrors.password = "Mật khẩu phải từ 8 ký tự trở lên.";
+      } else if (matchedFactors < 3) {
+        newErrors.password = "Mật khẩu phải chứa ít nhất 3 trong 4 yếu tố: chữ viết hoa, chữ viết thường, chữ số, ký tự đặc biệt.";
+      }
     }
+
+    if (formData.dob) {
+      const selectedDate = new Date(formData.dob);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      selectedDate.setHours(0, 0, 0, 0);
+      if (selectedDate >= today) {
+        newErrors.dob = "Ngày sinh phải là một ngày trong quá khứ (trước ngày hôm nay).";
+      }
+    }
+
     if (!formData.fullName.trim()) {
       newErrors.fullName = "Họ và tên không được để trống.";
     }

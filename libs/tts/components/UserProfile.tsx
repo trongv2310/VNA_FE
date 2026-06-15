@@ -137,6 +137,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       newErrors.fullName = "Họ và tên không được để trống.";
     }
 
+    if (formData.dob) {
+      const selectedDate = new Date(formData.dob);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      selectedDate.setHours(0, 0, 0, 0);
+      if (selectedDate >= today) {
+        newErrors.dob = "Ngày sinh phải là một ngày trong quá khứ (trước ngày hôm nay).";
+      }
+    }
+
     if (!formData.role) {
       newErrors.role = "Vui lòng chọn vai trò.";
     }

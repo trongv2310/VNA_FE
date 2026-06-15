@@ -6,6 +6,7 @@ import { User, Key, LogOut, ChevronRight } from "lucide-react";
 interface UserMenuProps {
   fullName: string;
   avatarUrl: string;
+  role: string;
   onSelectView: (view: "profile" | "change-password") => void;
   onLogout: () => void;
 }
@@ -13,6 +14,7 @@ interface UserMenuProps {
 export const UserMenu: React.FC<UserMenuProps> = ({
   fullName,
   avatarUrl,
+  role,
   onSelectView,
   onLogout,
 }) => {
@@ -97,7 +99,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               {fullName}
             </p>
             <p className="text-[10px] text-white/50 group-hover:text-white/60 transition-colors truncate">
-              Tài khoản quản trị
+              {role === "ADMIN" || role === "Quản trị viên"
+                ? "Tài khoản quản trị"
+                : role === "USER" || role === "Người dùng"
+                ? "Người dùng"
+                : role || "Người dùng"}
             </p>
           </div>
         </div>

@@ -147,6 +147,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
     <Sidebar
       fullName={userData.fullName}
       avatarUrl={userData.avatarUrl}
+      role={userData.role}
       onSelectView={(view) => {
         if (view === "change-password") {
           setShowChangePasswordModal(true);
@@ -171,7 +172,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
     <div className="relative h-screen w-screen overflow-hidden">
       {toast && (
         <div
-          className={`fixed top-6 left-1/2 z-50 flex items-center gap-4 rounded-xl px-5 py-3.5 text-sm font-semibold shadow-lg border select-none transition-all animate-in fade-in slide-in-from-top-4 duration-300 w-[min(480px,calc(100vw-32px))] -translate-x-1/2 ${
+          className={`fixed top-6 left-1/2 z-[9999] flex items-center gap-4 rounded-xl px-5 py-3.5 text-sm font-semibold shadow-lg border select-none transition-all animate-in fade-in slide-in-from-top-4 duration-300 w-[min(480px,calc(100vw-32px))] -translate-x-1/2 ${
             toast.type === "success"
               ? "bg-[#e9ffd7] text-[#147a22] border-[#c2f0a5]"
               : "bg-red-50 text-red-800 border-red-100"

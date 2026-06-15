@@ -39,8 +39,17 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({
     if (!newPassword) {
       newErrors.newPassword = "Vui lòng nhập mật khẩu mới.";
     } else {
-      if (newPassword.length < 6) {
-        newErrors.newPassword = "Mật khẩu phải chứa ít nhất 6 ký tự.";
+      const pw = newPassword.trim();
+      const hasUpper = /[A-Z]/.test(pw);
+      const hasLower = /[a-z]/.test(pw);
+      const hasDigit = /[0-9]/.test(pw);
+      const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+      const matchedFactors = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+
+      if (pw.length < 8) {
+        newErrors.newPassword = "Mật khẩu phải có ít nhất 8 ký tự.";
+      } else if (matchedFactors < 3) {
+        newErrors.newPassword = "Mật khẩu phải chứa ít nhất 3 trong 4 yếu tố: chữ viết hoa, chữ viết thường, chữ số, ký tự đặc biệt.";
       }
     }
 

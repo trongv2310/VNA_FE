@@ -464,6 +464,14 @@ export async function getUserDetail(id: number | string) {
   });
 }
 
+export async function deleteUser(id: number | string) {
+  return request<{ id: number }>(`/users/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+}
+
+
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};

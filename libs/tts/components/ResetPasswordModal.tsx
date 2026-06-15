@@ -25,8 +25,19 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
       showToast("Vui lòng nhập mật khẩu.", "error");
       return;
     }
-    if (pw.length < 6) {
-      showToast("Mật khẩu phải có ít nhất 6 ký tự.", "error");
+
+    const hasUpper = /[A-Z]/.test(pw);
+    const hasLower = /[a-z]/.test(pw);
+    const hasDigit = /[0-9]/.test(pw);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pw);
+    const matchedFactors = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+
+    if (pw.length < 8) {
+      showToast("Mật khẩu phải có ít nhất 8 ký tự.", "error");
+      return;
+    }
+    if (matchedFactors < 3) {
+      showToast("Mật khẩu phải chứa ít nhất 3 trong 4 yếu tố: chữ viết hoa, chữ viết thường, chữ số, ký tự đặc biệt.", "error");
       return;
     }
 
