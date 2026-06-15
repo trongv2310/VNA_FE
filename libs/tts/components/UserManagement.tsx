@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getUsers, updateUserAdmin, createUser, type UserListItem, type UserListMeta } from "../services/api";
 import { CreateUser } from "./CreateUser";
+import { EditUser } from "./EditUser";
 import { ResetPasswordModal } from "./ResetPasswordModal";
 
 interface UserManagementProps {
@@ -89,11 +90,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
       loadUsers();
     }, 400);
 
-    return () => {
-      active = false;
-      clearTimeout(delayDebounceFn);
-    };
-  }, [page, limit, filters, showToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit, filters]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -214,6 +212,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
       <CreateUser
         onSave={handleSaveCreate}
         onCancel={() => setIsAddingNew(false)}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (editingUser) {
+    return (
+      <EditUser
+        user={editingUser}
+        onSave={handleSaveEdit}
+        onCancel={() => setEditingUser(null)}
         showToast={showToast}
       />
     );
@@ -468,15 +477,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
         </div>
       </div>
 
-      {/* Edit User Modal Dialog */}
-      {editingUser && (
-        <EditUserModal
-          user={editingUser}
-          onSave={handleSaveEdit}
-          onCancel={() => setEditingUser(null)}
-          showToast={showToast}
-        />
-      )}
 
       {/* Reset Password Modal Dialog */}
       {passwordResetUser && (
@@ -537,166 +537,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
   );
 };
 
-// ==========================================
-// Edit User Modal Component
-// ==========================================
-interface EditUserModalProps {
-  user: UserListItem;
-  onSave: () => void;
-  onCancel: () => void;
-  showToast: (message: string, type: "success" | "error") => void;
-}
 
-const EditUserModal: React.FC<EditUserModalProps> = ({ user, onSave, onCancel, showToast }) => {
-  const [fullName, setFullName] = useState(user.fullName || "");
-  const [username, setUsername] = useState(user.username || "");
-  const [email, setEmail] = useState(user.email || "");
-  const [position, setPosition] = useState(user.position || "");
-  const [roleCode, setRoleCode] = useState(user.roleCodes[0] || "USER");
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) {
-      showToast("Vui lòng nhập họ và tên", "error");
-      return;
-    }
-    if (!username.trim()) {
-      showToast("Vui lòng nhập tên đăng nhập", "error");
-      return;
-    }
-    if (!email.trim()) {
-      showToast("Vui lòng nhập email", "error");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const response = await updateUserAdmin(user.id, {
-        fullName,
-        username,
-        email,
-        position,
-        roleCode,
-      });
-
-      if (response.success) {
-        showToast("Cập nhật thông tin người dùng thành công", "success");
-        onSave();
-      } else {
-        throw new Error(response.message || "Cập nhật thất bại");
-      }
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Cập nhật người dùng thất bại", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div onClick={isSubmitting ? undefined : onCancel} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <form
-        onSubmit={handleSubmit}
-        className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[20px] w-full max-w-[460px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col"
-      >
-        <div className="bg-blue-600 dark:bg-blue-700 text-white py-4 text-center font-bold text-base select-none tracking-wide">
-          Sửa thông tin người dùng
-        </div>
-
-        <div className="p-6 flex flex-col gap-5">
-          {/* Full Name */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Họ và tên <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-          </div>
-
-          {/* Username */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Tên đăng nhập <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-
-          {/* Email */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          {/* Position */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Chức danh
-            </label>
-            <input
-              type="text"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-            />
-          </div>
-
-          {/* Role selection */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Vai trò <span className="text-red-500">*</span>
-            </label>
-            <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-              <select
-                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer focus:ring-0 pr-8"
-                value={roleCode}
-                onChange={(e) => setRoleCode(e.target.value)}
-              >
-                <option value="ADMIN">Quản trị viên</option>
-                <option value="USER">Người dùng</option>
-              </select>
-              <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-5 px-6 pb-6 select-none font-bold text-sm">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-          >
-            Hủy bỏ
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isSubmitting ? "Đang lưu..." : "Lưu"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-};
 
 

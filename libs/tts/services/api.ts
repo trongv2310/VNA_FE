@@ -406,6 +406,9 @@ export async function updateUserAdmin(
   if (data.position !== undefined) formData.append("position", data.position);
   if (data.roleCode !== undefined) formData.append("roleCode", data.roleCode);
   if (data.isActive !== undefined) formData.append("isActive", String(data.isActive));
+  if (data.provinceCity !== undefined) formData.append("provinceCity", data.provinceCity);
+  if (data.wardCommune !== undefined) formData.append("wardCommune", data.wardCommune);
+  if (data.address !== undefined) formData.append("address", data.address);
   
   if (data.avatar?.startsWith("data:")) {
     const file = dataURLtoFile(data.avatar, "avatar.png");

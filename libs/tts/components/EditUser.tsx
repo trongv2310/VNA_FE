@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { Camera, Save, Calendar, ChevronDown } from "lucide-react";
-import { ChangeEmailDialog } from "@/components/profile/ChangeEmailDialog";
-import { sendChangeGmailOtp } from "@/libs/tts/services/api";
+import React, { useState, useEffect, useRef } from "react";
+import { Camera, Save, Calendar, ChevronDown, Loader2 } from "lucide-react";
+import { getUserDetail, updateUserAdmin, type UserListItem } from "../services/api";
 
-// Static options for provinces and wards used by the current UI.
 const PROVINCE_DATA: Record<string, string[]> = {
   "Thành phố Hồ Chí Minh": ["Phường Gò Vấp", "Phường Tân Sơn", "Phường An Nhơn", "Phường Bến Nghé", "Phường 12"],
   "Thành phố Hà Nội": ["Phường Hàng Bạc", "Phường Tràng Tiền", "Phường Dịch Vọng", "Phường Mỹ Đình"],
@@ -13,41 +11,81 @@ const PROVINCE_DATA: Record<string, string[]> = {
   "Thành phố Cần Thơ": ["Phường Ninh Kiều", "Phường An Khánh", "Phường Hưng Lợi"],
 };
 
-export interface UserData {
-  avatarUrl: string;
-  username: string;
-  fullName: string;
-  dob: string;
-  gender: string;
-  title: string;
-  role: string;
-  email: string;
-  province: string;
-  ward: string;
-  address: string;
-  isActive: boolean;
-}
-
-interface UserProfileProps {
-  initialData: UserData;
-  onSave: (data: UserData, successMessage?: string) => void;
+interface EditUserProps {
+  user: UserListItem;
+  onSave: () => void;
   onCancel: () => void;
   showToast: (message: string, type: "success" | "error") => void;
 }
 
-export const UserProfile: React.FC<UserProfileProps> = ({
-  initialData,
-  onSave,
-  onCancel,
-  showToast,
-}) => {
-  const [formData, setFormData] = useState<UserData>({ ...initialData });
-  const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
-  const [changeEmailExpiresInSeconds, setChangeEmailExpiresInSeconds] = useState(60);
-  const [isSendingChangeEmailOtp, setIsSendingChangeEmailOtp] = useState(false);
+export const EditUser: React.FC<EditUserProps> = ({ user, onSave, onCancel, showToast }) => {
+  const [formData, setFormData] = useState({
+    avatarUrl: "",
+    username: "",
+    fullName: "",
+    dob: "",
+    gender: "",
+    title: "",
+    role: "",
+    email: "",
+    province: "",
+    ward: "",
+    address: "",
+    isActive: true,
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [initialAvatarUrl, setInitialAvatarUrl] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dobInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const fetchDetail = async () => {
+      try {
+        const response = await getUserDetail(user.id);
+        if (active && response.success && response.data) {
+          const detail = response.data;
+          const rawDob = detail.dateOfBirth || "";
+          const formattedDob = rawDob.includes("T") ? rawDob.split("T")[0] : rawDob;
+
+          const roleCode = (detail.roles || [])
+            .map((r) => (typeof r === "string" ? r : r.code || ""))
+            .find((code) => code === "ADMIN" || code === "USER") || "USER";
+
+          setFormData({
+            avatarUrl: detail.avatar || "",
+            username: detail.username || "",
+            fullName: detail.fullName || "",
+            dob: formattedDob,
+            gender: detail.gender || "",
+            title: detail.position || "",
+            role: roleCode,
+            email: detail.email || "",
+            province: detail.provinceCity || "",
+            ward: detail.wardCommune || "",
+            address: detail.address || "",
+            isActive: detail.isActive ?? true,
+          });
+          setInitialAvatarUrl(detail.avatar || "");
+        }
+      } catch (error) {
+        if (active) {
+          showToast(error instanceof Error ? error.message : "Không thể tải chi tiết người dùng", "error");
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
 
   const handleCalendarClick = () => {
     try {
@@ -57,7 +95,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   };
 
-  // Handle Input Changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -70,11 +107,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   };
 
-  // Handle Select Changes
-  const handleSelectChange = (name: keyof UserData, value: string) => {
+  const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
-      // If province changes, reset ward
       if (name === "province") {
         updated.ward = "";
       }
@@ -90,7 +125,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     }
   };
 
-  // Handle Avatar Image Upload
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
   };
@@ -100,20 +134,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    // Check type
     const validTypes = ["image/png", "image/jpeg", "image/jpg"];
     if (!validTypes.includes(file.type)) {
       showToast("Vui lòng chọn ảnh định dạng PNG, JPG hoặc JPEG.", "error");
       return;
     }
 
-    // Check size (< 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showToast("Kích thước ảnh đại diện vượt quá giới hạn 5 MB.", "error");
       return;
     }
 
-    // Convert file to local preview URL
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
@@ -124,23 +155,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Switch Toggle Active State
   const toggleActiveState = () => {
     setFormData((prev) => ({ ...prev, isActive: !prev.isActive }));
   };
 
-  // Validate form
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
+    if (!formData.username.trim()) {
+      newErrors.username = "Tên đăng nhập không được để trống.";
+    }
     if (!formData.fullName.trim()) {
       newErrors.fullName = "Họ và tên không được để trống.";
     }
-
     if (!formData.role) {
       newErrors.role = "Vui lòng chọn vai trò.";
     }
-
     if (!formData.email.trim()) {
       newErrors.email = "Email không được để trống.";
     } else {
@@ -154,34 +184,59 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  // Save changes
-  const handleSaveClick = () => {
+  const handleSaveClick = async () => {
     if (!validate()) {
-      // Find the first error and show a toast
       const firstError = Object.values(errors)[0] || "Vui lòng kiểm tra lại thông tin nhập liệu.";
       showToast(firstError, "error");
       return;
     }
 
-    onSave(formData);
-    setIsChangeEmailOpen(false);
-  };
-
-  const handleOpenChangeEmail = async () => {
-    if (isSendingChangeEmailOtp) return;
-
-    setIsSendingChangeEmailOtp(true);
+    setIsSaving(true);
     try {
-      const response = await sendChangeGmailOtp();
-      setChangeEmailExpiresInSeconds(response.data?.expiresInSeconds || 60);
-      showToast(String(response.message || "Mã OTP đã được gửi về email hiện tại"), "success");
-      setIsChangeEmailOpen(true);
+      const payload: any = {
+        fullName: formData.fullName,
+        username: formData.username,
+        email: formData.email,
+        gender: formData.gender,
+        dateOfBirth: formData.dob || undefined,
+        position: formData.title,
+        roleCode: formData.role,
+        isActive: formData.isActive,
+        provinceCity: formData.province,
+        wardCommune: formData.ward,
+        address: formData.address,
+      };
+
+      if (formData.avatarUrl.startsWith("data:")) {
+        payload.avatar = formData.avatarUrl;
+      } else if (!formData.avatarUrl && initialAvatarUrl) {
+        payload.avatar = null;
+      }
+
+      const response = await updateUserAdmin(user.id, payload);
+      if (response.success) {
+        showToast("Cập nhật thông tin người dùng thành công", "success");
+        onSave();
+      } else {
+        throw new Error(response.message || "Cập nhật thất bại");
+      }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không thể gửi OTP đổi email", "error");
+      showToast(error instanceof Error ? error.message : "Cập nhật người dùng thất bại", "error");
     } finally {
-      setIsSendingChangeEmailOtp(false);
+      setIsSaving(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[400px] w-full items-center justify-center text-sm font-semibold text-zinc-500">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          <span>Đang tải thông tin chi tiết người dùng...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -192,19 +247,25 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             Chi tiết người dùng
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button
             onClick={onCancel}
-            className="px-4 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-sm transition-colors cursor-pointer"
+            disabled={isSaving}
+            className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-sm transition-colors cursor-pointer disabled:opacity-50"
           >
             Hủy bỏ
           </button>
           <button
             onClick={handleSaveClick}
-            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer"
+            disabled={isSaving}
+            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
-            <span>Lưu</span>
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>{isSaving ? "Đang lưu..." : "Lưu"}</span>
           </button>
         </div>
       </div>
@@ -230,7 +291,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <>
                 <img
                   src={formData.avatarUrl}
-                  alt="Avatar"
+                  alt="Avatar Preview"
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/40 text-white flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -247,7 +308,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           </div>
 
           {/* Guidelines */}
-          <div className="text-center">
+          <div className="text-center select-none">
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium leading-relaxed">
               *.jpeg, *.jpg, *.png.
             </p>
@@ -285,26 +346,31 @@ export const UserProfile: React.FC<UserProfileProps> = ({
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Username Field - Readonly */}
-              <div className="relative border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 rounded-xl px-4 py-2 flex flex-col justify-center select-none">
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
+              {/* Username Input */}
+              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 transition-all bg-white dark:bg-zinc-950
+                ${errors.username ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"}
+              `}>
+                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
+                  ${errors.username ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"}
+                `}>
                   Tên đăng nhập <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   name="username"
                   value={formData.username}
-                  readOnly
-                  className="w-full bg-transparent border-0 outline-none text-zinc-500 dark:text-zinc-500 text-sm font-medium pt-2 pb-0.5 cursor-not-allowed"
+                  onChange={handleInputChange}
+                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-bold pt-2 pb-0.5"
+                  placeholder="Nhập tên đăng nhập"
                 />
               </div>
 
-              {/* Full Name Field */}
+              {/* Full Name Input */}
               <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 transition-all bg-white dark:bg-zinc-950
                 ${errors.fullName ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"}
               `}>
                 <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
-                  ${errors.fullName ? "text-red-500" : "text-zinc-400 dark:text-zinc-500 focus-within:text-blue-500"}
+                  ${errors.fullName ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"}
                 `}>
                   Họ và tên <span className="text-red-500">*</span>
                 </label>
@@ -360,7 +426,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
               </div>
 
-              {/* Title Field */}
+              {/* Title Input */}
               <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
                 <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
                   Chức danh
@@ -371,7 +437,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                   value={formData.title}
                   onChange={handleInputChange}
                   className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-                  placeholder="Nhập chức danh (ví dụ: Chuyên viên)"
+                  placeholder="Nhập chức danh"
                 />
               </div>
 
@@ -379,7 +445,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950
                 ${errors.role ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"}
               `}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold
+                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
                   ${errors.role ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"}
                 `}>
                   Vai trò <span className="text-red-500">*</span>
@@ -391,45 +457,31 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     onChange={(e) => handleSelectChange("role", e.target.value)}
                     className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0"
                   >
-                    <option value={formData.role}>
-                      {formData.role === "ADMIN" || formData.role === "Quản trị viên"
-                        ? "Quản trị viên"
-                        : formData.role === "MANAGER" || formData.role === "Quản lý"
-                        ? "Quản lý"
-                        : formData.role === "USER" || formData.role === "Nhân viên" || formData.role === "Người dùng"
-                        ? "Người dùng"
-                        : formData.role || "Chọn vai trò"}
-                    </option>
+                    <option value="" className="text-zinc-400">Chọn vai trò</option>
+                    <option value="ADMIN">Quản trị viên</option>
+                    <option value="USER">Người dùng</option>
                   </select>
                   <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
                 </div>
               </div>
 
-              {/* Email Field with outside "Thay đổi" Toggle */}
-              <div className="md:col-span-1 flex items-end gap-3.5">
-                <div className="flex-1 relative border rounded-xl px-4 py-2 flex flex-col justify-center border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/10">
-                  <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold text-zinc-400 dark:text-zinc-500">
-                    Email
-                  </label>
-                  <div className="flex items-center justify-between gap-3 pt-2 pb-0.5">
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      readOnly
-                      className="w-full bg-transparent border-0 outline-none text-sm font-semibold text-zinc-500 dark:text-zinc-500 cursor-not-allowed"
-                      placeholder="example@gmail.com"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenChangeEmail}
-                  disabled={isSendingChangeEmailOtp}
-                  className="flex-shrink-0 mb-3 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors focus:outline-none cursor-pointer select-none disabled:cursor-not-allowed disabled:text-zinc-400"
-                >
-                  Thay đổi
-                </button>
+              {/* Email Input */}
+              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 transition-all bg-white dark:bg-zinc-950
+                ${errors.email ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"}
+              `}>
+                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold transition-colors
+                  ${errors.email ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"}
+                `}>
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-bold pt-2 pb-0.5"
+                  placeholder="Nhập email"
+                />
               </div>
             </div>
           </div>
@@ -490,7 +542,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                 </div>
               </div>
 
-              {/* Address Field */}
+              {/* Address Input */}
               <div className="md:col-span-2 relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
                 <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
                   Địa chỉ
@@ -508,21 +560,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({
           </div>
         </div>
       </div>
-
-      {isChangeEmailOpen && (
-        <ChangeEmailDialog
-          currentEmail={formData.email}
-          initialExpiresInSeconds={changeEmailExpiresInSeconds}
-          onSave={(newEmail) => {
-            const updatedData = { ...formData, email: newEmail };
-            setFormData(updatedData);
-            onSave(updatedData, "Thay đổi email thành công");
-            setIsChangeEmailOpen(false);
-          }}
-          onCancel={() => setIsChangeEmailOpen(false)}
-          showToast={showToast}
-        />
-      )}
     </div>
   );
 };

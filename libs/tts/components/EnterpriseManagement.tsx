@@ -102,7 +102,8 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
       }
     };
     fetchOptions();
-  }, [showToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load business list on page, limit, or filter changes
   useEffect(() => {
@@ -140,11 +141,8 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
       loadBusinesses();
     }, 400);
 
-    return () => {
-      active = false;
-      clearTimeout(delayDebounceFn);
-    };
-  }, [page, limit, filters, showToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, limit, filters]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
