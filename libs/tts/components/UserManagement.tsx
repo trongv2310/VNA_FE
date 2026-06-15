@@ -13,7 +13,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { getUsers, updateUserAdmin, createUser, type UserListItem, type UserListMeta } from "../services/api";
+import { getUsers, updateUserAdmin, createUser, deleteUser, type UserListItem, type UserListMeta } from "../services/api";
 import { CreateUser } from "./CreateUser";
 import { EditUser } from "./EditUser";
 import { ResetPasswordModal } from "./ResetPasswordModal";
@@ -53,6 +53,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
   const [passwordResetUser, setPasswordResetUser] = useState<UserListItem | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // Load user data on filter/pagination changes
   useEffect(() => {
@@ -72,8 +74,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
         });
 
         if (active && response.success && response.data) {
-          setUsers(response.data.items);
-          setMeta(response.data.meta);
+          const filteredItems = response.data.items.filter(
+            (u) =>
+              u.position?.toLowerCase() !== "doanh nghiep" &&
+              u.position?.toLowerCase() !== "doanh nghiệp"
+          );
+          setUsers(filteredItems);
+          
+          const filteredOutCount = response.data.items.length - filteredItems.length;
+          setMeta({
+            ...response.data.meta,
+            totalItems: Math.max(0, response.data.meta.totalItems - filteredOutCount),
+          });
         }
       } catch (error) {
         if (active) {
@@ -91,7 +103,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
     }, 400);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, filters]);
+  }, [page, limit, filters, refreshTrigger]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -147,13 +159,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
     setPasswordResetUser(null);
   };
 
-  const handleDeleteSelected = () => {
-    const confirmDelete = window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} người dùng đã chọn không?`);
-    if (!confirmDelete) return;
-
-    setUsers((prev) => prev.filter((u) => !selectedIds.includes(u.id)));
-    showToast("Xóa danh sách người dùng thành công", "success");
-    setSelectedIds([]);
+  const handleDeleteSelected = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map((id) => deleteUser(id)));
+      showToast("Xóa danh sách người dùng thành công", "success");
+      setSelectedIds([]);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Xóa người dùng thất bại", "error");
+      setRefreshTrigger((prev) => prev + 1);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveCreate = async (formData: any) => {
@@ -515,7 +533,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
           </div>
           <div className="flex items-center gap-3 pr-3">
             <button
-              onClick={handleDeleteSelected}
+              onClick={() => setIsDeleteConfirmOpen(true)}
               className="bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs px-3.5 py-1.5 flex items-center gap-1.5 transition-all shadow-md shadow-red-500/10 cursor-pointer"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -530,6 +548,41 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
             >
               <X className="h-4.5 w-4.5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/80 shadow-2xl rounded-[20px] w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col dark:border-zinc-800">
+            <div className="bg-red-600 dark:bg-red-700 text-white py-4 text-center font-bold text-base select-none tracking-wide">
+              Xác nhận xóa người dùng
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                Bạn có chắc chắn muốn xóa <strong>{selectedIds.length}</strong> người dùng đã chọn không? Hành động này sẽ xóa vĩnh viễn tài khoản khỏi cơ sở dữ liệu và không thể hoàn tác.
+              </p>
+              <div className="flex items-center justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteConfirmOpen(false);
+                    handleDeleteSelected();
+                  }}
+                  className="px-4.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-md transition-all cursor-pointer"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

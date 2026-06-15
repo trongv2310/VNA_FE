@@ -62,6 +62,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
   // Pagination State
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [meta, setMeta] = useState<BusinessListMeta>({
     page: 1,
     limit: 10,
@@ -142,7 +143,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
     }, 400);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, limit, filters]);
+  }, [page, limit, filters, refreshTrigger]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -191,6 +192,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
     setWizardMode(null);
     setEditingId(undefined);
     setPage(1); // Refresh list
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleDeleteSelected = async () => {
@@ -207,6 +209,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
       showToast("Xóa danh sách doanh nghiệp thành công", "success");
       setSelectedIds([]);
       setPage(1); // Refresh list
+      setRefreshTrigger((prev) => prev + 1);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Xóa doanh nghiệp thất bại", "error");
     }

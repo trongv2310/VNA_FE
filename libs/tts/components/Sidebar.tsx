@@ -12,6 +12,7 @@ import { UserMenu } from "./UserMenu";
 interface SidebarProps {
   fullName: string;
   avatarUrl: string;
+  role: string;
   onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management") => void;
   onLogout: () => void;
   activeItem?: string;
@@ -28,6 +29,7 @@ interface MenuItem {
 export const Sidebar: React.FC<SidebarProps> = ({
   fullName,
   avatarUrl,
+  role,
   onSelectView,
   onLogout,
   activeItem = "quan_ly_nguoi_dung",
@@ -182,6 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <UserMenu
           fullName={fullName}
           avatarUrl={avatarUrl}
+          role={role}
           onSelectView={onSelectView}
           onLogout={onLogout}
         />

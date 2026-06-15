@@ -530,29 +530,32 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
 
       {/* Wizard Step Indicator */}
       {mode !== "view" && (
-        <div className="flex items-center justify-center py-4 bg-transparent border-0 shadow-none">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 select-none">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-blue-600 text-white`}>
-                {step > 1 ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : "1"}
-              </div>
-              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                Thông tin doanh nghiệp
-              </span>
+        <div className="flex items-center w-full gap-4 py-4 select-none bg-transparent border-0 shadow-none">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-600 text-white">
+              {step > 1 ? <Check className="w-3.5 h-3.5 stroke-[2.5]" /> : "1"}
             </div>
-
-            <div className="w-24 h-px bg-zinc-250 dark:bg-zinc-800" />
-
-            <div className="flex items-center gap-2 select-none">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? "bg-blue-600 text-white" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-500"
-                }`}>
-                2
-              </div>
-              <span className={`text-xs font-bold ${step === 2 ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"}`}>
-                Xác nhận đăng ký
-              </span>
-            </div>
+            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+              Thông tin doanh nghiệp
+            </span>
           </div>
+
+          <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              step === 2 ? "bg-blue-600 text-white" : "bg-slate-400 dark:bg-zinc-800 text-white"
+            }`}>
+              2
+            </div>
+            <span className={`text-xs font-bold ${
+              step === 2 ? "text-zinc-800 dark:text-zinc-200" : "text-slate-400 dark:text-zinc-500"
+            }`}>
+              Xác nhận đăng ký
+            </span>
+          </div>
+
+          <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
         </div>
       )}
 
@@ -1265,7 +1268,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   type="button"
                   onClick={() => {
                     setAccountModalData(null);
-                    onCancel(); // Đóng popup và đóng màn hình đăng ký quay lại danh sách
+                    onSave(); // Đóng popup và đóng màn hình đăng ký quay lại danh sách
                   }}
                   className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-xs cursor-pointer transition-colors"
                 >
