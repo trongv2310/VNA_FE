@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, LogOut, X } from "lucide-react";
 import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement } from "../../components";
@@ -10,6 +10,7 @@ import {
   clearAuthTokens,
   getAccessToken,
   getProfile,
+  getStoredBackendUser,
   getStoredUserData,
   mapBackendUserToUserData,
   updateMe,
@@ -42,6 +43,74 @@ export const DepartmentDashboardScreen: React.FC = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const isSelfUpdatingRef = useRef(false);
+
+  // Polling to check if the user's password or status has been changed by Admin
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+
+    const interval = setInterval(async () => {
+      if (isSelfUpdatingRef.current) return;
+
+      try {
+        const storedUser = getStoredBackendUser();
+        if (!storedUser) return;
+
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        };
+
+        const res = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/users/me`, {
+          method: "GET",
+          headers
+        });
+
+        // If the polling request receives a 401, session is invalid
+        if (res.status === 401) {
+          clearAuthTokens();
+          showToastMsg("Phiên đăng nhập đã hết hạn hoặc tài khoản đã thay đổi. Vui lòng đăng nhập lại.", "error");
+          router.push("/department/login");
+          return;
+        }
+
+        if (res.ok) {
+          const payload = await res.json();
+          if (payload?.success && payload?.data) {
+            const freshUser = payload.data;
+
+            // Check if user was deactivated
+            if (freshUser.isActive === false) {
+              clearAuthTokens();
+              showToastMsg("Tài khoản của bạn đã bị khóa bởi quản trị viên.", "error");
+              router.push("/department/login");
+              return;
+            }
+
+            // Check if password or profile changed (updatedAt changed)
+            if (
+              !isSelfUpdatingRef.current &&
+              storedUser.updatedAt &&
+              freshUser.updatedAt &&
+              freshUser.updatedAt !== storedUser.updatedAt
+            ) {
+              clearAuthTokens();
+              showToastMsg("Thông tin tài khoản hoặc mật khẩu đã bị thay đổi. Vui lòng đăng nhập lại.", "error");
+              router.push("/department/login");
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra trạng thái phiên đăng nhập:", error);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [router]);
 
   useEffect(() => {
     if (!toast) return;
@@ -102,6 +171,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
   };
 
   const handleSaveProfile = async (updatedData: UserData, successMessage?: string) => {
+    isSelfUpdatingRef.current = true;
     try {
       const response = await updateMe(updatedData);
       const nextUserData = mapBackendUserToUserData(response.data);
@@ -111,6 +181,10 @@ export const DepartmentDashboardScreen: React.FC = () => {
       showToastMsg(String(successMessage || response.message || "Cập nhật thông tin thành công"), "success");
     } catch (error) {
       showToastMsg(error instanceof Error ? error.message : "Cập nhật thông tin thất bại", "error");
+    } finally {
+      setTimeout(() => {
+        isSelfUpdatingRef.current = false;
+      }, 2000);
     }
   };
 
@@ -125,12 +199,19 @@ export const DepartmentDashboardScreen: React.FC = () => {
     newPw: string,
     confirmPw: string,
   ) => {
+    isSelfUpdatingRef.current = true;
     try {
       const response = await changePassword(currentPw, newPw, confirmPw);
       showToastMsg(String(response.message || "Đổi mật khẩu thành công"), "success");
       setShowChangePasswordModal(false);
+      // Fetch fresh profile to update local updatedAt
+      await getProfile();
     } catch (error) {
       showToastMsg(error instanceof Error ? error.message : "Đổi mật khẩu thất bại", "error");
+    } finally {
+      setTimeout(() => {
+        isSelfUpdatingRef.current = false;
+      }, 2000);
     }
   };
 
