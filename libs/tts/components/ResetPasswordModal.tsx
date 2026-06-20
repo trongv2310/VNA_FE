@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface ResetPasswordModalProps {
   username: string;
@@ -17,6 +18,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
 }) => {
   const [newPassword, setNewPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,13 +73,27 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
             <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
               Mật khẩu mong muốn <span className="text-red-500">*</span>
             </label>
-            <input
-              type="password"
-              className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
-              placeholder="Nhập mật khẩu mong muốn"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <div className="flex items-center justify-between w-full pt-2 pb-0.5">
+              <input
+                type={showPassword ? "text" : "password"}
+                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold focus:ring-0"
+                placeholder="Nhập mật khẩu mong muốn"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-250 cursor-pointer focus:outline-none ml-2"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 

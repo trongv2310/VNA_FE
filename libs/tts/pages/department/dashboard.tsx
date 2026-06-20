@@ -77,6 +77,14 @@ export const DepartmentDashboardScreen: React.FC = () => {
           return;
         }
 
+        // If the account was deleted by Admin
+        if (res.status === 404) {
+          clearAuthTokens();
+          showToastMsg("Tài khoản của bạn đã bị xóa bởi quản trị viên.", "error");
+          router.push("/department/login");
+          return;
+        }
+
         if (res.ok) {
           const payload = await res.json();
           if (payload?.success && payload?.data) {
