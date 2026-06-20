@@ -9,6 +9,7 @@ import { Alert } from "@/libs/core/components/Alert";
 import { LoginAlert } from "@/components/auth/LoginAlert";
 import { Columns, Image as ImageIcon } from "lucide-react";
 import { login } from "../../services/api";
+import { CreateEnterprise } from "../../components/CreateEnterprise";
 
 export const DepartmentLoginScreen: React.FC = () => {
   const router = useRouter();
@@ -21,6 +22,20 @@ export const DepartmentLoginScreen: React.FC = () => {
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
   const [layout, setLayout] = useState<"unsplash" | "split">("unsplash");
+  
+  const [showRegister, setShowRegister] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+  };
 
   // Load layout preference on mount to avoid Next.js hydration mismatch
   useEffect(() => {
@@ -254,6 +269,7 @@ export const DepartmentLoginScreen: React.FC = () => {
 
                 <button
                   type="button"
+                  onClick={() => setShowRegister(true)}
                   className="w-full py-2.5 rounded-md border border-[#2563eb] text-[#2563eb] hover:bg-blue-50/50 active:scale-99 transition-all text-sm font-bold bg-transparent cursor-pointer"
                 >
                   Đăng ký tài khoản doanh nghiệp
@@ -264,6 +280,34 @@ export const DepartmentLoginScreen: React.FC = () => {
           </CardBody>
         </Card>
       </div>
+      
+      {showRegister && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm overflow-y-auto">
+          <div onClick={() => setShowRegister(false)} className="absolute inset-0" />
+          <div className="relative bg-slate-50 dark:bg-zinc-900 w-full max-w-5xl rounded-[24px] shadow-2xl p-6 md:p-8 overflow-y-auto max-h-[92vh] border border-zinc-200 dark:border-zinc-800 animate-in zoom-in-95 duration-200">
+            <CreateEnterprise
+              businessTypes={[]}
+              isRegistration={true}
+              onSave={() => {
+                setShowRegister(false);
+                showToast("Đăng ký tài khoản doanh nghiệp thành công!", "success");
+              }}
+              onCancel={() => setShowRegister(false)}
+              showToast={showToast}
+            />
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`fixed bottom-5 right-5 z-[100] px-5 py-3.5 rounded-xl shadow-lg font-bold text-sm animate-in fade-in slide-in-from-bottom-5 duration-300 flex items-center gap-2 ${
+          toast.type === "success" 
+            ? "bg-emerald-500 text-white shadow-emerald-500/20 border border-emerald-400" 
+            : "bg-red-500 text-white shadow-red-500/20 border border-red-400"
+        }`}>
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 };

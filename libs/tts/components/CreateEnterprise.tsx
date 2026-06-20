@@ -7,35 +7,31 @@ import {
   Upload,
   Eye,
   Trash2,
-  X,
   ArrowRight,
   Check,
   Loader2,
-  FileText,
 } from "lucide-react";
-import { createBusiness, getBusinessDetail, updateBusiness, deleteBusinessAttachment, getBusinesses, getUsers } from "../services/api";
+import {
+  createBusiness,
+  getBusinessDetail,
+  updateBusiness,
+  deleteBusinessAttachment,
+  getBusinesses,
+  getUsers,
+  getRegistrationOptions,
+  sendRegistrationOtp,
+  verifyRegistrationOtp,
+  confirmRegistration,
+  getBusinessOptions,
+  getMyBusinessProfile,
+  sendBusinessProfileEmailOtp,
+  verifyBusinessProfileEmailOtp,
+  updateMyBusinessProfile,
+} from "../services/api";
 import { IndustrySearchSelect } from "./IndustrySearchSelect";
 import { SearchSelect } from "./SearchSelect";
-
-
-const PROVINCE_DATA: Record<string, string[]> = {
-  "Thành phố Hồ Chí Minh": [
-    "Phường Hiệp Bình Phước",
-    "Phường Bến Nghé",
-    "Phường Bến Thành",
-    "Phường Cô Giang",
-    "Phường Cầu Kho",
-    "Phường Nguyễn Cư Trinh",
-    "Phường Đa Kao",
-    "Phường Tân Định",
-    "Phường Phạm Ngũ Lão",
-    "Phường Nguyễn Thái Bình",
-    "Phường Cầu Ông Lãnh",
-  ],
-  "Thành phố Hà Nội": ["Phường Hàng Bạc", "Phường Tràng Tiền", "Phường Dịch Vọng", "Phường Mỹ Đình"],
-  "Thành phố Đà Nẵng": ["Phường Hải Châu I", "Phường Thạch Thang", "Phường Hòa Cường Bắc"],
-  "Thành phố Cần Thơ": ["Phường Ninh Kiều", "Phường An Khánh", "Phường Hưng Lợi"],
-};
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
+import { useAddress } from "../hooks/useAddress";
 
 export interface CreateEnterpriseProps {
   businessTypes: string[];
@@ -44,6 +40,8 @@ export interface CreateEnterpriseProps {
   showToast: (message: string, type: "success" | "error") => void;
   mode?: "create" | "edit" | "view";
   enterpriseId?: number;
+  isRegistration?: boolean;
+  isProfileEdit?: boolean;
 }
 
 interface AttachmentState {
@@ -60,12 +58,58 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
   showToast,
   mode = "create",
   enterpriseId,
+  isRegistration = false,
+  isProfileEdit = false,
 }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountModalData, setAccountModalData] = useState<{ username: string; password: string } | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const isReadOnly = mode === "view";
+
+  const [types, setTypes] = useState<string[]>(businessTypes || []);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [otpTimer, setOtpTimer] = useState(300);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+
+  // States for Profile Edit Email Change
+  const [showProfileOtpModal, setShowProfileOtpModal] = useState(false);
+  const [showNewEmailModal, setShowNewEmailModal] = useState(false);
+  const [newEmailValue, setNewEmailValue] = useState("");
+  const [newEmailError, setNewEmailError] = useState("");
+  const [isSavingNewEmail, setIsSavingNewEmail] = useState(false);
+
+  useEffect(() => {
+    if ((isRegistration || isProfileEdit) && (!types || types.length === 0)) {
+      getRegistrationOptions()
+        .then((res) => {
+          if (res.success && res.data?.businessTypes) {
+            setTypes(res.data.businessTypes);
+          }
+        })
+        .catch((err) => {
+          showToast(err instanceof Error ? err.message : "Không thể tải danh sách loại hình doanh nghiệp", "error");
+        });
+    }
+  }, [isRegistration, isProfileEdit]);
+
+  useEffect(() => {
+    if (businessTypes && businessTypes.length > 0) {
+      setTypes(businessTypes);
+    }
+  }, [businessTypes]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if ((showOtpModal || showProfileOtpModal) && otpTimer > 0) {
+      interval = setInterval(() => {
+        setOtpTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [showOtpModal, showProfileOtpModal, otpTimer]);
 
   // Form Fields State
   const [formData, setFormData] = useState({
@@ -89,8 +133,30 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
     isActive: true,
   });
 
+  const registeredAddress = useAddress(formData.provinceCity);
+  const operatingAddress = useAddress(formData.operatingProvinceCity);
+
+  useEffect(() => {
+    const err =
+      registeredAddress.provincesError ||
+      registeredAddress.wardsError ||
+      operatingAddress.provincesError ||
+      operatingAddress.wardsError;
+    if (err) {
+      showToast(err, "error");
+    }
+  }, [
+    registeredAddress.provincesError,
+    registeredAddress.wardsError,
+    operatingAddress.provincesError,
+    operatingAddress.wardsError,
+    showToast,
+  ]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [accountUserId, setAccountUserId] = useState<number | null>(null);
+  const [localEnterpriseId, setLocalEnterpriseId] = useState<number | undefined>(enterpriseId);
+  const [deleteConfirmKey, setDeleteConfirmKey] = useState<string | null>(null);
 
   // Attachments State
   const [attachments, setAttachments] = useState<Record<string, AttachmentState>>({
@@ -99,7 +165,78 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
   });
 
   useEffect(() => {
-    if ((mode === "edit" || mode === "view") && enterpriseId) {
+    if (isProfileEdit) {
+      const fetchDetails = async () => {
+        setIsLoadingDetails(true);
+        try {
+          const res = await getMyBusinessProfile();
+          if (res.success && res.data) {
+            const ent = res.data;
+            setFormData({
+              businessName: ent.businessName || "",
+              taxCode: ent.taxCode || "",
+              businessType: ent.businessType || "",
+              industryCode: ent.industryCode || "",
+              industryName: ent.industryName || "",
+              licenseIssueDate: ent.licenseIssueDate || "",
+              provinceCity: ent.provinceCity || "",
+              wardCommune: ent.wardCommune || "",
+              address: ent.address || "",
+              foreignName: ent.foreignName || "",
+              email: ent.email || "",
+              agencyPhone: ent.agencyPhone || "",
+              operatingProvinceCity: ent.operatingProvinceCity || ent.provinceCity || "",
+              operatingWardCommune: ent.operatingWardCommune || ent.wardCommune || "",
+              businessLocation: ent.businessLocation || "",
+              representativeName: ent.representativeName || "",
+              representativePhone: ent.representativePhone || "",
+              isActive: ent.isActive ?? true,
+            });
+            if (ent.id) {
+              setLocalEnterpriseId(ent.id);
+            }
+            if (ent.accountUserId) {
+              setAccountUserId(ent.accountUserId);
+            }
+
+            // Map attachments
+            const nextAttachments: Record<string, AttachmentState> = {
+              gpkd: { file: null, name: "", url: "" },
+              gtk: { file: null, name: "", url: "" },
+            };
+
+            if (ent.attachments && ent.attachments.length > 0) {
+              ent.attachments.forEach((att) => {
+                if (att.displayName === "Giấy phép kinh doanh") {
+                  nextAttachments.gpkd = {
+                    file: null,
+                    name: att.originalName,
+                    url: att.fileUrl,
+                    id: att.id,
+                  };
+                } else if (att.displayName === "Giấy tờ khác") {
+                  nextAttachments.gtk = {
+                    file: null,
+                    name: att.originalName,
+                    url: att.fileUrl,
+                    id: att.id,
+                  };
+                }
+              });
+            }
+            setAttachments(nextAttachments);
+          } else {
+            showToast("Không thể tải chi tiết doanh nghiệp", "error");
+          }
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : "Tải chi tiết thất bại", "error");
+        } finally {
+          setIsLoadingDetails(false);
+        }
+      };
+
+      fetchDetails();
+    } else if ((mode === "edit" || mode === "view") && enterpriseId) {
       const fetchDetails = async () => {
         setIsLoadingDetails(true);
         try {
@@ -126,6 +263,9 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               representativePhone: ent.representativePhone || "",
               isActive: ent.isActive ?? true,
             });
+            if (ent.id) {
+              setLocalEnterpriseId(ent.id);
+            }
             if (ent.accountUserId) {
               setAccountUserId(ent.accountUserId);
             }
@@ -168,7 +308,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
 
       fetchDetails();
     }
-  }, [mode, enterpriseId]);
+  }, [mode, enterpriseId, isProfileEdit]);
 
   // File Upload Reference and Target
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,8 +317,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
   // Date input Ref
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  // Preview Modal State
-  const [previewFile, setPreviewFile] = useState<{ name: string; url: string; type: string } | null>(null);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -285,17 +424,19 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Delete attachment
-  const handleDeleteAttachment = async (key: string) => {
-    const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa tệp đính kèm này không?");
-    if (!confirmDelete) return;
+  // Delete attachment trigger confirm modal
+  const handleDeleteAttachment = (key: string) => {
+    setDeleteConfirmKey(key);
+  };
 
+  const executeDeleteAttachment = async (key: string) => {
     const att = attachments[key];
-    if (att.id && mode === "edit" && enterpriseId) {
+    const targetEnterpriseId = localEnterpriseId || enterpriseId;
+    if (att.id && mode === "edit" && targetEnterpriseId) {
       try {
-        const response = await deleteBusinessAttachment(enterpriseId, att.id);
+        const response = await deleteBusinessAttachment(targetEnterpriseId, att.id);
         if (response.success) {
-          showToast("Đã xóa tệp đính kèm khỏi máy chủ.", "success");
+          showToast("Xóa file thành công", "success");
         } else {
           showToast(response.message || "Xóa tệp thất bại", "error");
           return;
@@ -304,39 +445,96 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         showToast(error instanceof Error ? error.message : "Xóa tệp thất bại", "error");
         return;
       }
+    } else if (!att.id) {
+      showToast("Xóa file thành công", "success");
     }
 
     setAttachments((prev) => ({
       ...prev,
       [key]: { file: null, name: "", url: "", id: undefined },
     }));
-    if (!att.id) {
-      showToast("Đã xóa tệp đính kèm.", "success");
-    }
   };
 
   // Open Preview
   const handlePreviewClick = (key: string) => {
     const item = attachments[key];
-    if (item.file) {
-      setPreviewFile({
-        name: item.name,
-        url: item.url,
-        type: item.file.type,
-      });
-    } else if (item.url) {
-      let type = "application/pdf";
-      const ext = item.name.split(".").pop()?.toLowerCase();
-      if (["jpg", "jpeg", "png"].includes(ext || "")) {
-        type = `image/${ext === "jpg" ? "jpeg" : ext}`;
-      } else if (["doc", "docx"].includes(ext || "")) {
-        type = "application/msword";
+    const fileUrl = item.file ? item.url : item.url;
+    const fileName = item.name;
+    if (fileUrl) {
+      const previewUrl = `/department/dashboard/view-document?url=${encodeURIComponent(fileUrl)}&name=${encodeURIComponent(fileName)}`;
+      window.open(previewUrl, "_blank");
+    }
+  };
+
+  // Start the email change flow for Profile Edit
+  const handleStartEmailChange = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await sendBusinessProfileEmailOtp();
+      if (res.success) {
+        setOtpValue("");
+        setOtpTimer(300);
+        setShowProfileOtpModal(true);
+        showToast(res.message || "Đã gửi mã OTP về email hiện tại", "success");
+      } else {
+        throw new Error(res.message);
       }
-      setPreviewFile({
-        name: item.name,
-        url: item.url,
-        type,
-      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Gửi mã OTP thất bại", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Verify OTP for Profile Edit Email Change
+  const handleVerifyProfileOtp = async () => {
+    setIsVerifyingOtp(true);
+    try {
+      const res = await verifyBusinessProfileEmailOtp(otpValue);
+      if (res.success) {
+        showToast(res.message || "Xác thực OTP thành công", "success");
+        setShowProfileOtpModal(false);
+        setNewEmailValue("");
+        setNewEmailError("");
+        setShowNewEmailModal(true);
+      } else {
+        throw new Error(res.message);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Mã OTP không chính xác hoặc đã hết hạn", "error");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // Save the new email address for Profile Edit
+  const handleSaveNewEmail = async () => {
+    const email = newEmailValue.trim();
+    if (!email) {
+      setNewEmailError("Email không được để trống");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNewEmailError("Email không hợp lệ");
+      return;
+    }
+    setNewEmailError("");
+    setIsSavingNewEmail(true);
+    try {
+      const fd = new FormData();
+      fd.append("email", email);
+      const res = await updateMyBusinessProfile(fd);
+      if (res.success && res.data) {
+        showToast("Thay đổi email thành công", "success");
+        setFormData((prev) => ({ ...prev, email: res.data.email || email }));
+        setShowNewEmailModal(false);
+      } else {
+        throw new Error(res.message || "Thay đổi email thất bại");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Thay đổi email thất bại", "error");
+    } finally {
+      setIsSavingNewEmail(false);
     }
   };
 
@@ -405,6 +603,27 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       return;
     }
 
+    if (isRegistration) {
+      setIsSubmitting(true);
+      try {
+        const otpRes = await sendRegistrationOtp({ email });
+        if (otpRes.success) {
+          setOtpValue("");
+          setOtpTimer(300);
+          setShowOtpModal(true);
+        } else {
+          throw new Error(otpRes.message || "Gửi OTP thất bại");
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Gửi OTP thất bại";
+        showToast(errorMsg, "error");
+        setErrors((prev) => ({ ...prev, email: errorMsg }));
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     // Check tax code uniqueness on backend when creating new business
     if (mode === "create") {
       try {
@@ -425,24 +644,26 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       }
     }
 
-    // Check email uniqueness on backend (for both create and edit modes)
-    try {
-      const checkEmailRes = await getUsers({ email });
-      if (checkEmailRes.success && checkEmailRes.data && checkEmailRes.data.items) {
-        const duplicateUser = checkEmailRes.data.items.find(
-          (item) => item.email.toLowerCase() === email.toLowerCase()
-        );
-        if (duplicateUser) {
-          if (mode !== "edit" || duplicateUser.id !== accountUserId) {
-            setErrors((prev) => ({ ...prev, email: "Email đã được sử dụng bởi một doanh nghiệp khác." }));
-            showToast("Email đã được sử dụng bởi một doanh nghiệp khác.", "error");
-            return;
+    // Check email uniqueness on backend (for both create and edit modes, skip for profile edit)
+    if (!isProfileEdit) {
+      try {
+        const checkEmailRes = await getUsers({ email });
+        if (checkEmailRes.success && checkEmailRes.data && checkEmailRes.data.items) {
+          const duplicateUser = checkEmailRes.data.items.find(
+            (item) => item.email.toLowerCase() === email.toLowerCase()
+          );
+          if (duplicateUser) {
+            if (mode !== "edit" || duplicateUser.id !== accountUserId) {
+              setErrors((prev) => ({ ...prev, email: "Email đã được sử dụng bởi một doanh nghiệp khác." }));
+              showToast("Email đã được sử dụng bởi một doanh nghiệp khác.", "error");
+              return;
+            }
           }
         }
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Kiểm tra email thất bại", "error");
+        return;
       }
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Kiểm tra email thất bại", "error");
-      return;
     }
 
     setStep(2);
@@ -454,7 +675,9 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
     try {
       const fd = new FormData();
       fd.append("businessName", formData.businessName.trim());
-      fd.append("taxCode", formData.taxCode.replace(/\s/g, ""));
+      if (!isProfileEdit) {
+        fd.append("taxCode", formData.taxCode.replace(/\s/g, ""));
+      }
       fd.append("businessType", formData.businessType);
       fd.append("industryCode", formData.industryCode);
       fd.append("industryName", formData.industryName);
@@ -470,7 +693,9 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       fd.append("businessLocation", formData.businessLocation.trim());
       fd.append("representativeName", formData.representativeName.trim());
       fd.append("representativePhone", formData.representativePhone.trim());
-      fd.append("isActive", String(formData.isActive));
+      if (!isRegistration && !isProfileEdit) {
+        fd.append("isActive", String(formData.isActive));
+      }
 
       // Build attachments list and names metadata
       const filesToSend: File[] = [];
@@ -493,7 +718,27 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         fd.append("attachmentNames", JSON.stringify(namesToSend));
       }
 
-      if (mode === "edit" && enterpriseId) {
+      if (isProfileEdit) {
+        const response = await updateMyBusinessProfile(fd);
+        if (response.success) {
+          showToast("Cập nhật doanh nghiệp thành công", "success");
+          setStep(1);
+          onSave();
+        } else {
+          throw new Error(response.message || "Cập nhật doanh nghiệp thất bại");
+        }
+      } else if (isRegistration) {
+        const response = await confirmRegistration(fd);
+        if (response.success) {
+          const accInfo = response.data?.accountInfo || {
+            username: formData.taxCode.replace(/\s/g, ""),
+            password: "12345678",
+          };
+          setAccountModalData(accInfo);
+        } else {
+          throw new Error(response.message || "Đăng ký tài khoản doanh nghiệp thất bại");
+        }
+      } else if (mode === "edit" && enterpriseId) {
         const response = await updateBusiness(enterpriseId, fd);
         if (response.success) {
           showToast("Cập nhật doanh nghiệp thành công", "success");
@@ -515,7 +760,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "";
-      showToast(errorMsg || (mode === "edit" ? "Cập nhật doanh nghiệp thất bại" : "Thêm mới doanh nghiệp thất bại"), "error");
+      showToast(errorMsg || (isRegistration ? "Đăng ký tài khoản doanh nghiệp thất bại" : mode === "edit" ? "Cập nhật doanh nghiệp thất bại" : "Thêm mới doanh nghiệp thất bại"), "error");
 
       const newErrors: Record<string, string> = {};
       if (errorMsg.includes("Mã số thuế") || errorMsg.toLowerCase().includes("taxcode") || errorMsg.includes("đăng nhập")) {
@@ -523,9 +768,12 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         setStep(1);
       } else if (errorMsg.includes("Email") || errorMsg.toLowerCase().includes("email")) {
         newErrors.email = errorMsg;
-        setStep(2);
+        setStep(isRegistration ? 1 : 2);
       } else if (errorMsg.includes("Tên doanh nghiệp") || errorMsg.toLowerCase().includes("businessname")) {
         newErrors.businessName = errorMsg;
+        setStep(1);
+      } else if (errorMsg.includes("số điện thoại") || errorMsg.includes("Số điện thoại") || errorMsg.includes("SĐT")) {
+        newErrors.representativePhone = errorMsg;
         setStep(1);
       }
 
@@ -542,7 +790,13 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       {/* Top Banner Header */}
       <div className="flex items-center justify-between border-t-4 border-emerald-600 bg-white dark:bg-zinc-950 rounded-2xl p-4 shadow-sm border border-zinc-200/60 dark:border-zinc-800/80">
         <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-50 select-none">
-          {mode === "view" ? "Chi tiết doanh nghiệp" : mode === "edit" ? "Chỉnh sửa doanh nghiệp" : "Thêm mới doanh nghiệp"}
+          {isRegistration 
+            ? "Đăng ký tài khoản doanh nghiệp" 
+            : mode === "view" 
+            ? "Chi tiết doanh nghiệp" 
+            : mode === "edit" 
+            ? "Chỉnh sửa doanh nghiệp" 
+            : "Thêm mới doanh nghiệp"}
         </h2>
       </div>
 
@@ -569,7 +823,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
             <span className={`text-xs font-bold ${
               step === 2 ? "text-zinc-800 dark:text-zinc-200" : "text-slate-400 dark:text-zinc-500"
             }`}>
-              Xác nhận đăng ký
+              {isRegistration ? "Xác nhận thông tin" : "Xác nhận đăng ký"}
             </span>
           </div>
 
@@ -617,7 +871,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
 
               {/* Mã số thuế */}
               <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.taxCode ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${(mode === "edit" || isReadOnly) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                } ${(mode === "edit" || isReadOnly || isProfileEdit) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
                 <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.taxCode ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
                   }`}>
                   Mã số thuế <span className="text-red-500">*</span>
@@ -627,7 +881,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   name="taxCode"
                   value={formData.taxCode}
                   onChange={handleInputChange}
-                  disabled={mode === "edit" || isReadOnly}
+                  disabled={mode === "edit" || isReadOnly || isProfileEdit}
                   className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
                   placeholder={isReadOnly ? "" : "Nhập mã số thuế"}
                 />
@@ -637,7 +891,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               <SearchSelect
                 label="Loại hình kinh doanh"
                 value={formData.businessType}
-                options={businessTypes.map((t) => ({ value: t, label: t }))}
+                options={types.map((t) => ({ value: t, label: t }))}
                 placeholder="Chọn loại hình"
                 onChange={(val) => handleSelectChange("businessType", val)}
                 error={!!errors.businessType}
@@ -692,24 +946,46 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               <SearchSelect
                 label="Tỉnh/Thành phố ĐKKD"
                 value={formData.provinceCity}
-                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
-                placeholder="Chọn Tỉnh/Thành phố"
+                options={registeredAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
+                placeholder={
+                  registeredAddress.isLoadingProvinces
+                    ? "Đang tải danh sách..."
+                    : registeredAddress.provincesError
+                    ? "Không thể tải danh sách Tỉnh/Thành phố"
+                    : "Chọn Tỉnh/Thành phố"
+                }
                 onChange={(val) => handleSelectChange("provinceCity", val)}
                 error={!!errors.provinceCity}
                 required
-                disabled={isReadOnly}
+                disabled={isReadOnly || registeredAddress.isLoadingProvinces || !!registeredAddress.provincesError}
               />
 
               {/* Phường/Xã ĐKKD */}
               <SearchSelect
                 label="Phường/Xã ĐKKD"
                 value={formData.wardCommune}
-                options={(!formData.provinceCity ? [] : (PROVINCE_DATA[formData.provinceCity] || []).map((w) => ({ value: w, label: w })))}
-                placeholder={!formData.provinceCity ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/xã"}
+                options={registeredAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
+                placeholder={
+                  registeredAddress.isLoadingWards
+                    ? "Đang tải phường/xã..."
+                    : registeredAddress.wardsError
+                    ? "Không thể tải danh sách Phường/Xã"
+                    : !formData.provinceCity
+                    ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                    : registeredAddress.wards.length === 0
+                    ? "Không có dữ liệu Phường/Xã"
+                    : "Chọn phường/xã"
+                }
                 onChange={(val) => handleSelectChange("wardCommune", val)}
                 error={!!errors.wardCommune}
                 required
-                disabled={!formData.provinceCity || isReadOnly}
+                disabled={
+                  !formData.provinceCity ||
+                  isReadOnly ||
+                  registeredAddress.isLoadingWards ||
+                  !!registeredAddress.wardsError ||
+                  registeredAddress.wards.length === 0
+                }
               />
 
               {/* Địa chỉ đăng ký */}
@@ -754,21 +1030,32 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               </div>
 
               {/* Email */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.email ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.email ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "vna@gmail.com"}
-                />
+              <div className={`relative border rounded-xl px-4 py-2 flex items-center justify-between focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.email ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                } ${(isReadOnly || isProfileEdit) ? "bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                <div className="flex-1 flex flex-col justify-center min-w-0">
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.email ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                    }`}>
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly || isProfileEdit}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "vna@gmail.com"}
+                  />
+                </div>
+                {isProfileEdit && !isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={handleStartEmailChange}
+                    className="text-blue-600 hover:text-blue-700 text-xs font-bold transition-colors cursor-pointer select-none pl-2 flex-shrink-0"
+                  >
+                    Thay đổi
+                  </button>
+                )}
               </div>
 
               {/* Số điện thoại cơ quan */}
@@ -793,20 +1080,42 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               <SearchSelect
                 label="Tỉnh/TP hoạt động KD"
                 value={formData.operatingProvinceCity}
-                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
-                placeholder="Chọn Tỉnh/Thành phố"
+                options={operatingAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
+                placeholder={
+                  operatingAddress.isLoadingProvinces
+                    ? "Đang tải danh sách..."
+                    : operatingAddress.provincesError
+                    ? "Không thể tải danh sách Tỉnh/Thành phố"
+                    : "Chọn Tỉnh/Thành phố"
+                }
                 onChange={(val) => handleSelectChange("operatingProvinceCity", val)}
-                disabled={isReadOnly}
+                disabled={isReadOnly || operatingAddress.isLoadingProvinces || !!operatingAddress.provincesError}
               />
 
               {/* Phường/Xã hoạt động KD */}
               <SearchSelect
                 label="Phường/xã hoạt động KD"
                 value={formData.operatingWardCommune}
-                options={(!formData.operatingProvinceCity ? [] : (PROVINCE_DATA[formData.operatingProvinceCity] || []).map((w) => ({ value: w, label: w })))}
-                placeholder={!formData.operatingProvinceCity ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/xã"}
+                options={operatingAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
+                placeholder={
+                  operatingAddress.isLoadingWards
+                    ? "Đang tải phường/xã..."
+                    : operatingAddress.wardsError
+                    ? "Không thể tải danh sách Phường/Xã"
+                    : !formData.operatingProvinceCity
+                    ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                    : operatingAddress.wards.length === 0
+                    ? "Không có dữ liệu Phường/Xã"
+                    : "Chọn phường/xã"
+                }
                 onChange={(val) => handleSelectChange("operatingWardCommune", val)}
-                disabled={!formData.operatingProvinceCity || isReadOnly}
+                disabled={
+                  !formData.operatingProvinceCity ||
+                  isReadOnly ||
+                  operatingAddress.isLoadingWards ||
+                  !!operatingAddress.wardsError ||
+                  operatingAddress.wards.length === 0
+                }
               />
 
               {/* Địa điểm kinh doanh */}
@@ -1135,54 +1444,6 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         </div>
       )}
 
-      {/* Preview File Dialog Modal */}
-      {previewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
-          <div onClick={() => setPreviewFile(null)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[20px] w-full max-w-4xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-[90vh]">
-            <div className="bg-blue-600 dark:bg-blue-700 text-white py-4.5 px-6 font-bold text-base flex items-center justify-between">
-              <span className="truncate max-w-[80%]">Xem trước tài liệu: {previewFile.name}</span>
-              <button
-                onClick={() => setPreviewFile(null)}
-                className="p-1 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 bg-zinc-50 dark:bg-zinc-900/10 p-6 overflow-hidden flex items-center justify-center">
-              {previewFile.type.startsWith("image/") ? (
-                <img
-                  src={previewFile.url}
-                  alt={previewFile.name}
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800"
-                />
-              ) : previewFile.type === "application/pdf" ? (
-                <iframe
-                  src={previewFile.url}
-                  title={previewFile.name}
-                  className="w-full h-full rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-12 text-center select-none bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl shadow-sm max-w-md">
-                  <FileText className="w-16 h-16 text-blue-600 mb-4" />
-                  <p className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{previewFile.name}</p>
-                  <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
-                    Tài liệu định dạng Word hoặc kiểu tệp này không thể hiển thị trực tiếp. Vui lòng tải xuống để xem.
-                  </p>
-                  <a
-                    href={previewFile.url}
-                    download={previewFile.name}
-                    className="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/10 active:scale-98 transition-all"
-                  >
-                    Tải xuống tệp tin
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {accountModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
@@ -1239,6 +1500,316 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
           </div>
         </div>
       )}
+
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div onClick={() => setShowOtpModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
+            
+            {/* Title */}
+            <div className="flex flex-col gap-2 items-center text-center">
+              <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
+                Xác thực email
+              </h3>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-[320px]">
+                Chúng tôi đã gửi mã xác minh qua số email <br />
+                <strong className="text-zinc-900 dark:text-zinc-200 font-extrabold break-all">{formData.email}</strong> <br />
+                Bạn vui lòng kiểm tra và điền mã xác thực
+              </p>
+            </div>
+
+            {/* OTP Input Field */}
+            <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all">
+              <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold text-zinc-400 dark:text-zinc-500">
+                OTP <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="otp"
+                maxLength={6}
+                value={otpValue}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
+                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-base font-bold text-center tracking-[0.5em] pt-2 pb-0.5"
+                placeholder="------"
+              />
+            </div>
+
+            {/* Timer and Resend Prompt */}
+            <div className="flex flex-col gap-1.5 items-center select-none text-xs font-bold">
+              <span className="text-[#2563eb] text-sm">
+                {Math.floor(otpTimer / 60).toString().padStart(2, "0")}:
+                {(otpTimer % 60).toString().padStart(2, "0")}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-500 font-medium">
+                Chưa nhận được mã?{" "}
+                <button
+                  type="button"
+                  disabled={otpTimer > 0 || isResendingOtp}
+                  onClick={async () => {
+                    setIsResendingOtp(true);
+                    try {
+                      const res = await sendRegistrationOtp({ email: formData.email });
+                      if (res.success) {
+                        showToast(res.message || "Đã gửi lại mã OTP thành công", "success");
+                        setOtpTimer(300);
+                        setOtpValue("");
+                      } else {
+                        throw new Error(res.message);
+                      }
+                    } catch (err) {
+                      showToast(err instanceof Error ? err.message : "Gửi lại OTP thất bại", "error");
+                    } finally {
+                      setIsResendingOtp(false);
+                    }
+                  }}
+                  className={`underline cursor-pointer ${
+                    otpTimer > 0 
+                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline" 
+                      : "text-[#2563eb] hover:text-[#1d4ed8]"
+                  }`}
+                >
+                  Gửi lại
+                </button>
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                disabled={isVerifyingOtp || otpValue.length < 6}
+                onClick={async () => {
+                  setIsVerifyingOtp(true);
+                  try {
+                    const res = await verifyRegistrationOtp({ email: formData.email, otp: otpValue });
+                    if (res.success) {
+                      showToast(res.message || "Xác thực OTP thành công", "success");
+                      setShowOtpModal(false);
+                      setStep(2); // Advance to the confirmation step!
+                    } else {
+                      throw new Error(res.message);
+                    }
+                  } catch (err) {
+                    showToast(err instanceof Error ? err.message : "Mã OTP không chính xác hoặc đã hết hạn", "error");
+                  } finally {
+                    setIsVerifyingOtp(false);
+                  }
+                }}
+                className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold text-sm shadow-md shadow-blue-500/10 active:scale-99 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isVerifyingOtp ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Đang xác nhận...</span>
+                  </>
+                ) : (
+                  "Xác nhận"
+                )}
+              </button>
+              
+              <button
+                type="button"
+                disabled={isVerifyingOtp}
+                onClick={() => setShowOtpModal(false)}
+                className="w-full py-3 text-center text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-sm cursor-pointer transition-colors active:scale-99 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showProfileOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div onClick={() => setShowProfileOtpModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
+            
+            {/* Title */}
+            <div className="flex flex-col gap-2 items-center text-center">
+              <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
+                Thay đổi email
+              </h3>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-[320px]">
+                Chúng tôi đã gửi mã xác minh qua số email cũ <br />
+                <strong className="text-zinc-900 dark:text-zinc-200 font-extrabold break-all">{formData.email}</strong> <br />
+                Bạn vui lòng kiểm tra và điền mã xác thực
+              </p>
+            </div>
+
+            {/* OTP Input Field */}
+            <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all">
+              <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold text-zinc-400 dark:text-zinc-500">
+                OTP <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="otp"
+                maxLength={6}
+                value={otpValue}
+                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
+                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-base font-bold text-center tracking-[0.5em] pt-2 pb-0.5"
+                placeholder="------"
+              />
+            </div>
+
+            {/* Timer and Resend Prompt */}
+            <div className="flex flex-col gap-1.5 items-center select-none text-xs font-bold">
+              <span className="text-[#2563eb] text-sm">
+                {Math.floor(otpTimer / 60).toString().padStart(2, "0")}:
+                {(otpTimer % 60).toString().padStart(2, "0")}
+              </span>
+              <span className="text-zinc-400 dark:text-zinc-500 font-medium">
+                Chưa nhận được mã?{" "}
+                <button
+                  type="button"
+                  disabled={otpTimer > 0 || isResendingOtp}
+                  onClick={async () => {
+                    setIsResendingOtp(true);
+                    try {
+                      const res = await sendBusinessProfileEmailOtp();
+                      if (res.success) {
+                        showToast(res.message || "Đã gửi lại mã OTP thành công", "success");
+                        setOtpTimer(300);
+                        setOtpValue("");
+                      } else {
+                        throw new Error(res.message);
+                      }
+                    } catch (err) {
+                      showToast(err instanceof Error ? err.message : "Gửi lại OTP thất bại", "error");
+                    } finally {
+                      setIsResendingOtp(false);
+                    }
+                  }}
+                  className={`underline cursor-pointer ${
+                    otpTimer > 0 
+                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline" 
+                      : "text-[#2563eb] hover:text-[#1d4ed8]"
+                  }`}
+                >
+                  Gửi lại
+                </button>
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                disabled={isVerifyingOtp || otpValue.length < 6}
+                onClick={handleVerifyProfileOtp}
+                className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold text-sm shadow-md shadow-blue-500/10 active:scale-99 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isVerifyingOtp ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Đang xác nhận...</span>
+                  </>
+                ) : (
+                  "Xác nhận"
+                )}
+              </button>
+              
+              <button
+                type="button"
+                disabled={isVerifyingOtp}
+                onClick={() => setShowProfileOtpModal(false)}
+                className="w-full py-3 text-center text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-sm cursor-pointer transition-colors active:scale-99 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showNewEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div onClick={() => setShowNewEmailModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
+            
+            {/* Title */}
+            <div className="flex flex-col gap-2 items-center text-center">
+              <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
+                Thay đổi email
+              </h3>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-[320px]">
+                Vui lòng nhập email mới
+              </p>
+            </div>
+
+            {/* Email Input Field */}
+            <div className={`relative border rounded-xl px-4 py-2.5 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${
+              newEmailError ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+            }`}>
+              <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${
+                newEmailError ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+              }`}>
+                Email <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                name="newEmail"
+                value={newEmailValue}
+                onChange={(e) => {
+                  setNewEmailValue(e.target.value);
+                  if (newEmailError) setNewEmailError("");
+                }}
+                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5"
+                placeholder="vnagroup01@gmail.com"
+              />
+            </div>
+
+            {newEmailError && (
+              <p className="text-red-500 text-xs font-bold -mt-3 text-center">{newEmailError}</p>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                disabled={isSavingNewEmail}
+                onClick={handleSaveNewEmail}
+                className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold text-sm shadow-md shadow-blue-500/10 active:scale-99 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingNewEmail ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Đang lưu...</span>
+                  </>
+                ) : (
+                  "Lưu"
+                )}
+              </button>
+              
+              <button
+                type="button"
+                disabled={isSavingNewEmail}
+                onClick={() => setShowNewEmailModal(false)}
+                className="w-full py-3 text-center text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-sm cursor-pointer transition-colors active:scale-99 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      <DeleteConfirmModal
+        isOpen={deleteConfirmKey !== null}
+        onClose={() => setDeleteConfirmKey(null)}
+        onConfirm={async () => {
+          if (deleteConfirmKey) {
+            await executeDeleteAttachment(deleteConfirmKey);
+            setDeleteConfirmKey(null);
+          }
+        }}
+        title="Xác nhận xóa tệp đính kèm"
+        description="Bạn có chắc chắn muốn xóa tệp đính kèm này không? Hành động này sẽ xóa vĩnh viễn tệp đính kèm khỏi cơ sở dữ liệu và không thể hoàn tác."
+      />
     </div>
   );
 };

@@ -676,3 +676,60 @@ export async function deleteBusinessAttachment(businessId: number | string, atta
   });
 }
 
+export async function getRegistrationOptions() {
+  return request<{ businessTypes: string[] }>("/businesses/register/options", {
+    method: "GET",
+  });
+}
+
+export async function sendRegistrationOtp(body: { email: string }) {
+  return request<{ email: string; expiresInSeconds: number }>("/businesses/register/send-otp", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function verifyRegistrationOtp(body: { email: string; otp: string }) {
+  return request<{ email: string; verified: boolean }>("/businesses/register/verify-otp", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function confirmRegistration(formData: FormData) {
+  return request<any>("/businesses/register/confirm", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function getMyBusinessProfile() {
+  return request<BusinessListItem>("/businesses/me", {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function sendBusinessProfileEmailOtp() {
+  return request<any>("/businesses/me/email/send-otp", {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
+
+export async function verifyBusinessProfileEmailOtp(otp: string) {
+  return request<any>("/businesses/me/email/verify-otp", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ otp }),
+  });
+}
+
+export async function updateMyBusinessProfile(formData: FormData) {
+  return request<BusinessListItem>("/businesses/me", {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: formData,
+  });
+}
+
