@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, LogOut, X } from "lucide-react";
-import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement } from "../../components";
+import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement, CreateEnterprise } from "../../components";
 import type { UserData } from "../../components/UserProfile";
 import {
   changePassword,
@@ -38,7 +38,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
   const [initialUserData, setInitialUserData] = useState<UserData>(EMPTY_USER_DATA);
   const [profileResetKey, setProfileResetKey] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management">("profile");
+  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management" | "company-info">("profile");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -149,6 +149,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
 
     if (storedUserData.role.includes("ADMIN")) {
       setActiveView("user-management");
+    } else {
+      setActiveView("company-info");
     }
 
     // Fetch fresh profile data from DB in background
@@ -251,6 +253,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
           ? "quan_ly_nguoi_dung"
           : activeView === "enterprise-management"
           ? "quan_ly_doanh_nghiep"
+          : activeView === "company-info"
+          ? "thong_tin_doanh_nghiep"
           : ""
       }
       onCloseMobile={() => setMobileMenuOpen(false)}
@@ -337,6 +341,19 @@ export const DepartmentDashboardScreen: React.FC = () => {
             <UserManagement showToast={showToastMsg} />
           ) : activeView === "enterprise-management" ? (
             <EnterpriseManagement showToast={showToastMsg} />
+          ) : activeView === "company-info" ? (
+            <CreateEnterprise
+              key={profileResetKey}
+              businessTypes={[]}
+              isProfileEdit={true}
+              mode="edit"
+              onSave={() => setProfileResetKey((curr) => curr + 1)}
+              onCancel={() => {
+                setProfileResetKey((curr) => curr + 1);
+                showToastMsg("Đã khôi phục dữ liệu ban đầu.", "success");
+              }}
+              showToast={showToastMsg}
+            />
           ) : (
             <UserProfile
               key={profileResetKey}

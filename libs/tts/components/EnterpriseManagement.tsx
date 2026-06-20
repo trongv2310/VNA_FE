@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ResetPasswordModal } from "./ResetPasswordModal";
 import { CreateEnterprise } from "./CreateEnterprise";
+import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { IndustrySearchSelect, MOCK_INDUSTRIES_LEVEL4, type IndustryLevel4 } from "./IndustrySearchSelect";
 import { SearchSelect } from "./SearchSelect";
 import {
@@ -90,6 +91,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
   const [passwordResetEnterprise, setPasswordResetEnterprise] = useState<BusinessListItem | null>(null);
   const [wizardMode, setWizardMode] = useState<"create" | "edit" | "view" | null>(null);
   const [editingId, setEditingId] = useState<number | undefined>(undefined);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   // Fetch BUSINESS_TYPES options from backend
   useEffect(() => {
@@ -197,12 +199,8 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
   };
 
   const handleDeleteSelected = async () => {
-    const confirmDelete = window.confirm(
-      `Bạn có chắc chắn muốn xóa ${selectedIds.length} doanh nghiệp đã chọn không?`
-    );
-    if (!confirmDelete) return;
-
     try {
+      setIsLoading(true);
       // Delete sequentially
       for (const id of selectedIds) {
         await deleteBusiness(id);
@@ -213,6 +211,8 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
       setRefreshTrigger((prev) => prev + 1);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Xóa doanh nghiệp thất bại", "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -560,7 +560,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
           </div>
           <div className="flex items-center gap-3 pr-3">
             <button
-              onClick={handleDeleteSelected}
+              onClick={() => setIsDeleteConfirmOpen(true)}
               className="bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs px-3.5 py-1.5 flex items-center gap-1.5 transition-all shadow-md shadow-red-500/10 cursor-pointer"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -578,6 +578,18 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
           </div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteSelected}
+        title="Xác nhận xóa doanh nghiệp"
+        description={
+          <>
+            Bạn có chắc chắn muốn xóa <strong>{selectedIds.length}</strong> doanh nghiệp đã chọn không? Hành động này sẽ xóa vĩnh viễn dữ liệu doanh nghiệp khỏi hệ thống và không thể hoàn tác.
+          </>
+        }
+      />
     </div>
   );
 };

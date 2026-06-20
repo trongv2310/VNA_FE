@@ -68,11 +68,13 @@ export const SearchSelect: React.FC<SearchSelectProps> = ({
             type="text"
             readOnly
             disabled={disabled}
-            className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pr-8 ${
+            className={`w-full bg-transparent border-0 outline-none text-sm font-semibold pr-8 transition-colors ${
               disabled ? "cursor-not-allowed" : "cursor-pointer"
+            } ${
+              displayValue ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"
             }`}
-            placeholder={disabled ? "" : placeholder}
-            value={displayValue || (disabled ? "" : placeholder)}
+            placeholder={placeholder}
+            value={displayValue || placeholder}
             onFocus={() => {
               if (!disabled) setIsOpen(true);
             }}

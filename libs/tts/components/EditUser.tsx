@@ -4,13 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Camera, Save, Calendar, ChevronDown, Loader2 } from "lucide-react";
 import { getUserDetail, updateUserAdmin, type UserListItem } from "../services/api";
 import { SearchSelect } from "./SearchSelect";
-
-const PROVINCE_DATA: Record<string, string[]> = {
-  "Thành phố Hồ Chí Minh": ["Phường Gò Vấp", "Phường Tân Sơn", "Phường An Nhơn", "Phường Bến Nghé", "Phường 12"],
-  "Thành phố Hà Nội": ["Phường Hàng Bạc", "Phường Tràng Tiền", "Phường Dịch Vọng", "Phường Mỹ Đình"],
-  "Thành phố Đà Nẵng": ["Phường Hải Châu I", "Phường Thạch Thang", "Phường Hòa Cường Bắc"],
-  "Thành phố Cần Thơ": ["Phường Ninh Kiều", "Phường An Khánh", "Phường Hưng Lợi"],
-};
+import { useAddress } from "../hooks/useAddress";
 
 interface EditUserProps {
   user: UserListItem;
@@ -34,6 +28,22 @@ export const EditUser: React.FC<EditUserProps> = ({ user, onSave, onCancel, show
     address: "",
     isActive: true,
   });
+
+  const {
+    provinces,
+    wards,
+    isLoadingProvinces,
+    isLoadingWards,
+    provincesError,
+    wardsError,
+  } = useAddress(formData.province);
+
+  useEffect(() => {
+    const err = provincesError || wardsError;
+    if (err) {
+      showToast(err, "error");
+    }
+  }, [provincesError, wardsError, showToast]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -496,19 +506,36 @@ export const EditUser: React.FC<EditUserProps> = ({ user, onSave, onCancel, show
               <SearchSelect
                 label="Tỉnh/ thành phố"
                 value={formData.province}
-                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
-                placeholder="Chọn tỉnh/ thành phố"
+                options={provinces.map((p) => ({ value: p.name, label: p.name }))}
+                placeholder={
+                  isLoadingProvinces
+                    ? "Đang tải danh sách..."
+                    : provincesError
+                      ? "Không thể tải danh sách Tỉnh/Thành phố"
+                      : "Chọn tỉnh/ thành phố"
+                }
                 onChange={(val) => handleSelectChange("province", val)}
+                disabled={isLoadingProvinces || !!provincesError}
               />
 
               {/* Ward Dropdown Select */}
               <SearchSelect
                 label="Phường xã"
                 value={formData.ward}
-                options={(!formData.province ? [] : (PROVINCE_DATA[formData.province] || []).map((w) => ({ value: w, label: w })))}
-                placeholder={!formData.province ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/ xã"}
+                options={wards.map((w) => ({ value: w.name, label: w.name }))}
+                placeholder={
+                  isLoadingWards
+                    ? "Đang tải phường/ xã..."
+                    : wardsError
+                      ? "Không thể tải danh sách Phường/Xã"
+                      : !formData.province
+                        ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                        : wards.length === 0
+                          ? "Không có dữ liệu Phường/Xã"
+                          : "Chọn phường/ xã"
+                }
                 onChange={(val) => handleSelectChange("ward", val)}
-                disabled={!formData.province}
+                disabled={!formData.province || isLoadingWards || !!wardsError || wards.length === 0}
               />
 
               {/* Address Input */}

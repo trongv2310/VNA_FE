@@ -81,9 +81,13 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
             type="text"
             readOnly
             disabled={disabled}
-            className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pr-8 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
-            placeholder={disabled ? "" : "Chọn ngành nghề kinh doanh"}
-            value={displayValue || (disabled ? "" : "Chọn ngành nghề kinh doanh")}
+            className={`w-full bg-transparent border-0 outline-none text-sm font-semibold pr-8 transition-colors ${
+              disabled ? "cursor-not-allowed" : "cursor-pointer"
+            } ${
+              displayValue ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"
+            }`}
+            placeholder="Chọn ngành nghề kinh doanh"
+            value={displayValue || "Chọn ngành nghề kinh doanh"}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => {
               if (!disabled) setIsOpen(true);
@@ -93,7 +97,9 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
             }}
           />
           <ChevronDown
-            className={`absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+            className={`absolute right-0 w-4.5 h-4.5 text-zinc-400 pointer-events-none transition-transform duration-200 ${
+              isOpen ? "rotate-180" : ""
+            }`}
           />
         </div>
       </div>

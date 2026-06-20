@@ -13,7 +13,7 @@ interface SidebarProps {
   fullName: string;
   avatarUrl: string;
   role: string;
-  onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management") => void;
+  onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management" | "company-info") => void;
   onLogout: () => void;
   activeItem?: string;
   onCloseMobile?: () => void;
@@ -48,8 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
-  const menuItems: MenuItem[] = [
-    {
+  const menuItems: MenuItem[] = [];
+
+  if (role && role.includes("ADMIN")) {
+    menuItems.push({
       id: "he_thong",
       label: "Hệ thống",
       icon: <Settings className="w-5 h-5 flex-shrink-0" />,
@@ -58,8 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "quan_ly_doanh_nghiep", label: "Quản lý doanh nghiệp" },
         { id: "ky_bao_cao", label: "Kỳ báo cáo" },
       ],
-    },
-    {
+    });
+    menuItems.push({
       id: "tai_nan_lao_dong",
       label: "Tai nạn lao động",
       icon: <ShieldAlert className="w-5 h-5 flex-shrink-0" />,
@@ -67,8 +69,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: "danh_muc_chung", label: "Danh mục chung" },
         { id: "tnld_theo_hdld", label: "TNLĐ theo HĐLĐ" },
       ],
-    },
-  ];
+    });
+  } else {
+    menuItems.push({
+      id: "he_thong",
+      label: "Hệ thống",
+      icon: <Settings className="w-5 h-5 flex-shrink-0" />,
+      children: [
+        { id: "thong_tin_doanh_nghiep", label: "Thông tin doanh nghiệp" },
+      ],
+    });
+    menuItems.push({
+      id: "tai_nan_lao_dong",
+      label: "Tai nạn lao động",
+      icon: <ShieldAlert className="w-5 h-5 flex-shrink-0" />,
+      children: [
+        { id: "tnld_theo_hdld", label: "TNLĐ theo HĐLĐ" },
+      ],
+    });
+  }
 
   return (
     <div className="w-72 h-full flex flex-col bg-[#0b2868] text-white select-none border-r border-[#081e50]">
@@ -157,6 +176,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onSelectView("user-management");
                           } else if (child.id === "quan_ly_doanh_nghiep") {
                             onSelectView("enterprise-management");
+                          } else if (child.id === "thong_tin_doanh_nghiep") {
+                            onSelectView("company-info");
                           }
                         }}
                         className={`w-full flex items-center px-4 py-2 text-xs rounded-lg transition-all text-left font-medium cursor-pointer
