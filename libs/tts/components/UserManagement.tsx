@@ -221,7 +221,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
         throw new Error(response.message || "Tạo người dùng thất bại");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Thêm mới người dùng thất bại", "error");
+      throw error;
     }
   };
 
@@ -272,7 +272,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
       </div>
 
       {/* Main Table Container */}
-      <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+      <div className="relative flex-1 bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60 dark:bg-zinc-950/60 backdrop-blur-[1px] transition-all">
+            <div className="flex flex-col items-center gap-2.5 animate-in fade-in zoom-in-95 duration-150">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 select-none">Đang tải danh sách...</span>
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -361,16 +370,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="p-12 text-center text-zinc-400 dark:text-zinc-500">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-                      <span className="text-sm font-semibold select-none">Đang tải danh sách người dùng...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : users.length === 0 ? (
+              {users.length === 0 && !isLoading ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-zinc-400 dark:text-zinc-500 font-semibold select-none text-sm">
                     Không tìm thấy người dùng nào phù hợp.
@@ -398,9 +398,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => 
                           className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all cursor-pointer group"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px] text-slate-400 group-hover:text-blue-600 transition-colors">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M21.178 7.178a2 2 0 1 1 2.822 2.822L17.5 16.5l-2.5.5.5-2.5z" />
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                           </svg>
                         </button>
                         <button

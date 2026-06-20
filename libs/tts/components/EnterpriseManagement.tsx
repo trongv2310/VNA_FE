@@ -14,6 +14,7 @@ import {
 import { ResetPasswordModal } from "./ResetPasswordModal";
 import { CreateEnterprise } from "./CreateEnterprise";
 import { IndustrySearchSelect, MOCK_INDUSTRIES_LEVEL4, type IndustryLevel4 } from "./IndustrySearchSelect";
+import { SearchSelect } from "./SearchSelect";
 import {
   getBusinesses,
   getBusinessOptions,
@@ -260,7 +261,16 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
       </div>
 
       {/* Main Table Container */}
-      <div className="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+      <div className="relative flex-1 bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60 dark:bg-zinc-950/60 backdrop-blur-[1px] transition-all">
+            <div className="flex flex-col items-center gap-2.5 animate-in fade-in zoom-in-95 duration-150">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 select-none">Đang tải danh sách...</span>
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
@@ -362,16 +372,7 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="p-12 text-center text-zinc-400 dark:text-zinc-500">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-                      <span className="text-sm font-semibold select-none">Đang tải danh sách doanh nghiệp...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : businesses.length === 0 ? (
+              {businesses.length === 0 && !isLoading ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-zinc-400 dark:text-zinc-500 font-semibold select-none text-sm">
                     Không tìm thấy doanh nghiệp nào phù hợp.
@@ -824,26 +825,17 @@ const EditEnterpriseModal: React.FC<EditEnterpriseModalProps> = ({
           </div>
 
           {/* Loại hình kinh doanh */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Loại hình kinh doanh <span className="text-red-500">*</span>
-            </label>
-            <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-              <select
-                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer focus:ring-0 pr-8"
-                value={businessType}
-                onChange={(e) => setBusinessType(e.target.value)}
-              >
-                <option value="">Chọn loại hình</option>
-                {businessTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {BUSINESS_TYPE_LABELS[t] || t}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-            </div>
-          </div>
+          <SearchSelect
+            label="Loại hình kinh doanh"
+            value={businessType}
+            options={businessTypes.map((t) => ({
+              value: t,
+              label: BUSINESS_TYPE_LABELS[t] || t,
+            }))}
+            placeholder="Chọn loại hình"
+            onChange={setBusinessType}
+            required
+          />
 
           {/* Ngành nghề kinh doanh */}
           <IndustrySearchSelect
@@ -855,24 +847,17 @@ const EditEnterpriseModal: React.FC<EditEnterpriseModalProps> = ({
           />
 
           {/* Phường/Xã */}
-          <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-            <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-              Phường/Xã DKKD <span className="text-red-500">*</span>
-            </label>
-            <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-              <select
-                className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer focus:ring-0 pr-8"
-                value={ward}
-                onChange={(e) => setWard(e.target.value)}
-              >
-                <option value="">Chọn phường/xã</option>
-                {WARD_OPTIONS.map((w) => (
-                  <option key={w} value={w}>{w}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-            </div>
-          </div>
+          <SearchSelect
+            label="Phường/Xã DKKD"
+            value={ward}
+            options={WARD_OPTIONS.map((w) => ({
+              value: w,
+              label: w,
+            }))}
+            placeholder="Chọn phường/xã"
+            onChange={setWard}
+            required
+          />
 
           {/* Địa chỉ chi tiết */}
           <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">

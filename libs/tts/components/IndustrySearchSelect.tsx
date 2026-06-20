@@ -83,7 +83,7 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
             disabled={disabled}
             className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pr-8 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
             placeholder={disabled ? "" : "Chọn ngành nghề kinh doanh"}
-            value={isOpen ? searchTerm : displayValue}
+            value={displayValue || (disabled ? "" : "Chọn ngành nghề kinh doanh")}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => {
               if (!disabled) setIsOpen(true);

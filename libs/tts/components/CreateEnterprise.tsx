@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { createBusiness, getBusinessDetail, updateBusiness, deleteBusinessAttachment, getBusinesses, getUsers } from "../services/api";
 import { IndustrySearchSelect } from "./IndustrySearchSelect";
+import { SearchSelect } from "./SearchSelect";
 
 
 const PROVINCE_DATA: Record<string, string[]> = {
@@ -513,7 +514,24 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         }
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : (mode === "edit" ? "Cập nhật doanh nghiệp thất bại" : "Thêm mới doanh nghiệp thất bại"), "error");
+      const errorMsg = error instanceof Error ? error.message : "";
+      showToast(errorMsg || (mode === "edit" ? "Cập nhật doanh nghiệp thất bại" : "Thêm mới doanh nghiệp thất bại"), "error");
+
+      const newErrors: Record<string, string> = {};
+      if (errorMsg.includes("Mã số thuế") || errorMsg.toLowerCase().includes("taxcode") || errorMsg.includes("đăng nhập")) {
+        newErrors.taxCode = errorMsg;
+        setStep(1);
+      } else if (errorMsg.includes("Email") || errorMsg.toLowerCase().includes("email")) {
+        newErrors.email = errorMsg;
+        setStep(2);
+      } else if (errorMsg.includes("Tên doanh nghiệp") || errorMsg.toLowerCase().includes("businessname")) {
+        newErrors.businessName = errorMsg;
+        setStep(1);
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -616,30 +634,16 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               </div>
 
               {/* Loại hình kinh doanh */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.businessType ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.businessType ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Loại hình kinh doanh <span className="text-red-500">*</span>
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="businessType"
-                    value={formData.businessType}
-                    onChange={(e) => handleSelectChange("businessType", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Chọn loại hình</option>
-                    {businessTypes.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Loại hình kinh doanh"
+                value={formData.businessType}
+                options={businessTypes.map((t) => ({ value: t, label: t }))}
+                placeholder="Chọn loại hình"
+                onChange={(val) => handleSelectChange("businessType", val)}
+                error={!!errors.businessType}
+                required
+                disabled={isReadOnly}
+              />
 
               {/* Ngành nghề kinh doanh chính */}
               <div className="w-full">
@@ -685,58 +689,28 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               </div>
 
               {/* Tỉnh/Thành phố ĐKKD */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.provinceCity ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.provinceCity ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Tỉnh/Thành phố ĐKKD <span className="text-red-500">*</span>
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="provinceCity"
-                    value={formData.provinceCity}
-                    onChange={(e) => handleSelectChange("provinceCity", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Chọn Tỉnh/Thành phố</option>
-                    {Object.keys(PROVINCE_DATA).map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Tỉnh/Thành phố ĐKKD"
+                value={formData.provinceCity}
+                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
+                placeholder="Chọn Tỉnh/Thành phố"
+                onChange={(val) => handleSelectChange("provinceCity", val)}
+                error={!!errors.provinceCity}
+                required
+                disabled={isReadOnly}
+              />
 
               {/* Phường/Xã ĐKKD */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.wardCommune ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${(isReadOnly || !formData.provinceCity) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.wardCommune ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Phường/Xã ĐKKD <span className="text-red-500">*</span>
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="wardCommune"
-                    value={formData.wardCommune}
-                    onChange={(e) => handleSelectChange("wardCommune", e.target.value)}
-                    className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none pr-8 focus:ring-0 ${(!formData.provinceCity || isReadOnly) ? "cursor-not-allowed" : "cursor-pointer"}`}
-                    disabled={!formData.provinceCity || isReadOnly}
-                  >
-                    {!formData.provinceCity ? (
-                      <option value="">Vui lòng chọn Tỉnh/Thành phố trước</option>
-                    ) : (
-                      <>
-                        <option value="">Chọn phường/xã</option>
-                        {(PROVINCE_DATA[formData.provinceCity] || []).map((w) => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Phường/Xã ĐKKD"
+                value={formData.wardCommune}
+                options={(!formData.provinceCity ? [] : (PROVINCE_DATA[formData.provinceCity] || []).map((w) => ({ value: w, label: w })))}
+                placeholder={!formData.provinceCity ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/xã"}
+                onChange={(val) => handleSelectChange("wardCommune", val)}
+                error={!!errors.wardCommune}
+                required
+                disabled={!formData.provinceCity || isReadOnly}
+              />
 
               {/* Địa chỉ đăng ký */}
               <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 md:col-span-2 xl:col-span-2 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
@@ -816,54 +790,24 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               </div>
 
               {/* Tỉnh/TP hoạt động KD */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Tỉnh/TP hoạt động KD
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="operatingProvinceCity"
-                    value={formData.operatingProvinceCity}
-                    onChange={(e) => handleSelectChange("operatingProvinceCity", e.target.value)}
-                    disabled={isReadOnly}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Chọn Tỉnh/Thành phố</option>
-                    {Object.keys(PROVINCE_DATA).map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Tỉnh/TP hoạt động KD"
+                value={formData.operatingProvinceCity}
+                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
+                placeholder="Chọn Tỉnh/Thành phố"
+                onChange={(val) => handleSelectChange("operatingProvinceCity", val)}
+                disabled={isReadOnly}
+              />
 
               {/* Phường/Xã hoạt động KD */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center bg-white dark:bg-zinc-950 transition-all ${(isReadOnly || !formData.operatingProvinceCity) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Phường/xã hoạt động KD
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="operatingWardCommune"
-                    value={formData.operatingWardCommune}
-                    onChange={(e) => handleSelectChange("operatingWardCommune", e.target.value)}
-                    className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none pr-8 focus:ring-0 ${(!formData.operatingProvinceCity || isReadOnly) ? "cursor-not-allowed" : "cursor-pointer"}`}
-                    disabled={!formData.operatingProvinceCity || isReadOnly}
-                  >
-                    {!formData.operatingProvinceCity ? (
-                      <option value="">Vui lòng chọn Tỉnh/Thành phố trước</option>
-                    ) : (
-                      <>
-                        <option value="">Chọn phường/xã</option>
-                        {(PROVINCE_DATA[formData.operatingProvinceCity] || []).map((w) => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Phường/xã hoạt động KD"
+                value={formData.operatingWardCommune}
+                options={(!formData.operatingProvinceCity ? [] : (PROVINCE_DATA[formData.operatingProvinceCity] || []).map((w) => ({ value: w, label: w })))}
+                placeholder={!formData.operatingProvinceCity ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/xã"}
+                onChange={(val) => handleSelectChange("operatingWardCommune", val)}
+                disabled={!formData.operatingProvinceCity || isReadOnly}
+              />
 
               {/* Địa điểm kinh doanh */}
               <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>

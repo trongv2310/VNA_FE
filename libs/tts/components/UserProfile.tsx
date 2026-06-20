@@ -4,6 +4,7 @@ import React, { useState, useRef } from "react";
 import { Camera, Save, Calendar, ChevronDown } from "lucide-react";
 import { ChangeEmailDialog } from "@/components/profile/ChangeEmailDialog";
 import { sendChangeGmailOtp } from "@/libs/tts/services/api";
+import { SearchSelect } from "./SearchSelect";
 
 // Static options for provinces and wards used by the current UI.
 const PROVINCE_DATA: Record<string, string[]> = {
@@ -350,25 +351,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
 
               {/* Gender Dropdown Select */}
-              <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Giới tính
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={(e) => handleSelectChange("gender", e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0"
-                  >
-                    <option value="" className="text-zinc-400">Chọn giới tính</option>
-                    <option value="Nam">Nam</option>
-                    <option value="Nữ">Nữ</option>
-                    <option value="Khác">Khác</option>
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Giới tính"
+                value={formData.gender}
+                options={[
+                  { value: "Nam", label: "Nam" },
+                  { value: "Nữ", label: "Nữ" },
+                  { value: "Khác", label: "Khác" },
+                ]}
+                placeholder="Chọn giới tính"
+                onChange={(val) => handleSelectChange("gender", val)}
+              />
 
               {/* Title Field */}
               <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
@@ -386,34 +379,27 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </div>
 
               {/* Role Dropdown Select */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950
-                ${errors.role ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"}
-              `}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold
-                  ${errors.role ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"}
-                `}>
-                  Vai trò <span className="text-red-500">*</span>
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="role"
-                    value={formData.role}
-                    onChange={(e) => handleSelectChange("role", e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0"
-                  >
-                    <option value={formData.role}>
-                      {formData.role === "ADMIN" || formData.role === "Quản trị viên"
-                        ? "Quản trị viên"
-                        : formData.role === "MANAGER" || formData.role === "Quản lý"
-                        ? "Quản lý"
-                        : formData.role === "USER" || formData.role === "Nhân viên" || formData.role === "Người dùng"
-                        ? "Người dùng"
-                        : formData.role || "Chọn vai trò"}
-                    </option>
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Vai trò"
+                value={formData.role}
+                options={[
+                  {
+                    value: formData.role,
+                    label: formData.role === "ADMIN" || formData.role === "Quản trị viên"
+                      ? "Quản trị viên"
+                      : formData.role === "MANAGER" || formData.role === "Quản lý"
+                      ? "Quản lý"
+                      : formData.role === "USER" || formData.role === "Nhân viên" || formData.role === "Người dùng"
+                      ? "Người dùng"
+                      : formData.role || "Chọn vai trò"
+                  }
+                ]}
+                placeholder="Chọn vai trò"
+                onChange={(val) => handleSelectChange("role", val)}
+                error={!!errors.role}
+                required
+                disabled
+              />
 
               {/* Email Field with outside "Thay đổi" Toggle */}
               <div className="md:col-span-1 flex items-end gap-3.5">
@@ -452,53 +438,23 @@ export const UserProfile: React.FC<UserProfileProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Province Dropdown Select */}
-              <div className="relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Tỉnh/ thành phố
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="province"
-                    value={formData.province}
-                    onChange={(e) => handleSelectChange("province", e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none cursor-pointer pr-8 focus:ring-0"
-                  >
-                    <option value="" className="text-zinc-400">Chọn tỉnh/ thành phố</option>
-                    {Object.keys(PROVINCE_DATA).map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Tỉnh/ thành phố"
+                value={formData.province}
+                options={Object.keys(PROVINCE_DATA).map((p) => ({ value: p, label: p }))}
+                placeholder="Chọn tỉnh/ thành phố"
+                onChange={(val) => handleSelectChange("province", val)}
+              />
 
               {/* Ward Dropdown Select */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center bg-white dark:bg-zinc-950 focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 transition-all ${!formData.province ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Phường xã
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <select
-                    name="ward"
-                    value={formData.ward}
-                    onChange={(e) => handleSelectChange("ward", e.target.value)}
-                    className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold appearance-none pr-8 focus:ring-0 ${!formData.province ? "cursor-not-allowed" : "cursor-pointer"}`}
-                    disabled={!formData.province}
-                  >
-                    {!formData.province ? (
-                      <option value="">Vui lòng chọn Tỉnh/Thành phố trước</option>
-                    ) : (
-                      <>
-                        <option value="">Chọn phường/ xã</option>
-                        {(PROVINCE_DATA[formData.province] || []).map((w) => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
+              <SearchSelect
+                label="Phường xã"
+                value={formData.ward}
+                options={(!formData.province ? [] : (PROVINCE_DATA[formData.province] || []).map((w) => ({ value: w, label: w })))}
+                placeholder={!formData.province ? "Vui lòng chọn Tỉnh/Thành phố trước" : "Chọn phường/ xã"}
+                onChange={(val) => handleSelectChange("ward", val)}
+                disabled={!formData.province}
+              />
 
               {/* Address Field */}
               <div className="md:col-span-2 relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950">
