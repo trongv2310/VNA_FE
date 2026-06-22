@@ -733,3 +733,41 @@ export async function updateMyBusinessProfile(formData: FormData) {
   });
 }
 
+export interface ListDepartmentReportsQuery {
+  page?: number | string;
+  limit?: number | string;
+  year?: string;
+  periodType?: string;
+  status?: string;
+  reportPeriodId?: string;
+  businessName?: string;
+  taxCode?: string;
+  provinceCity?: string;
+  wardCommune?: string;
+}
+
+export async function getDepartmentReports(query?: ListDepartmentReportsQuery) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/labor-accident-reports/admin${queryString ? `?${queryString}` : ""}`;
+  return request<any>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function receiveDepartmentReport(id: number | string) {
+  return request<any>(`/labor-accident-reports/admin/${id}/receive`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
+
+

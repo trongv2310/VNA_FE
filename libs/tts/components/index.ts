@@ -13,8 +13,5 @@ export * from "./EditUser";
 export * from "./SearchSelect";
 export * from "./DocumentViewer";
 export * from "./DeleteConfirmModal";
-
-
-
-
-
+export * from "./DepartmentReports";
+export * from "./DepartmentReportDetail";
