@@ -153,8 +153,14 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
   return (
     <div className="flex flex-col gap-6 h-full text-zinc-700 dark:text-zinc-300">
       {/* CSS style block for browser print settings */}
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          /* Reset parent heights and overflows to enable full page printing */
+          html, body, #__next, .h-screen, .overflow-hidden, main, .overflow-y-auto, [class*="h-screen"], [class*="overflow-hidden"], [class*="overflow-y-auto"] {
+            height: auto !important;
+            overflow: visible !important;
+            position: static !important;
+          }
           /* Hide Sidebar, Header, Layout elements */
           body * {
             visibility: hidden;
@@ -188,7 +194,7 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
             padding: 4px !important;
           }
         }
-      `}</style>
+      `}} />
 
       {/* Top Banner Header - Hidden during print */}
       <div className="flex items-center justify-between border-t-4 border-blue-600 bg-white dark:bg-zinc-950 rounded-2xl p-4 shadow-sm border border-zinc-200/60 dark:border-zinc-800/80 no-print select-none">
@@ -219,7 +225,7 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
           <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
             Báo cáo tổng hợp tình hình tai nạn lao động - Kỳ báo cáo: {report.periodLabel} năm {year}
           </h3>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="no-print flex items-center gap-2 text-xs">
             <span className="font-semibold text-red-500 flex items-center gap-1">
               **Vui lòng đính kèm báo cáo TNLĐ có dấu mộc công ty:
             </span>
@@ -371,18 +377,18 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
                   return (
                     <tr
                       key={idx}
-                      className="border-b border-zinc-100 dark:border-zinc-800/60 hover:bg-zinc-55/20 dark:hover:bg-zinc-900/10 transition-colors"
+                      className="border-b border-zinc-200 dark:border-zinc-800 hover:bg-zinc-55/20 dark:hover:bg-zinc-900/10 transition-colors"
                     >
                       <td className="p-3 pl-8 text-zinc-700 dark:text-zinc-300 font-medium">
                         {row.title}
                       </td>
-                      <td className="p-3 border-l border-r border-zinc-150 dark:border-zinc-850 text-center font-mono font-bold text-zinc-500">
+                      <td className="p-3 border-l border-r border-zinc-200 dark:border-zinc-800 text-center font-mono font-bold text-zinc-500">
                         {row.code || "-"}
                       </td>
                       {row.data?.map((val, subIdx) => (
                         <td
                           key={subIdx}
-                          className="p-3 border-r border-zinc-150 dark:border-zinc-850 text-center font-semibold font-mono"
+                          className="p-3 border-r border-zinc-200 dark:border-zinc-800 text-center font-semibold font-mono"
                         >
                           {val}
                         </td>
@@ -442,22 +448,22 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
 
               <tbody>
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 text-center font-semibold font-mono text-sm">
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850 text-left font-bold text-zinc-900 dark:text-zinc-100">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-left font-bold text-zinc-900 dark:text-zinc-100">
                     20
                   </td>
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850 text-blue-600 dark:text-blue-400 font-bold">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-blue-600 dark:text-blue-400 font-bold">
                     6.000.000
                   </td>
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
                     2.000.000
                   </td>
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
                     2.000.000
                   </td>
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
                     2.000.000
                   </td>
-                  <td className="p-4 border-r border-zinc-150 dark:border-zinc-850 text-red-600 dark:text-red-400 font-bold">
+                  <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-red-600 dark:text-red-400 font-bold">
                     20.000.000
                   </td>
                 </tr>

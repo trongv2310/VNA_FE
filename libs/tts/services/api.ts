@@ -501,12 +501,14 @@ async function request<T>(path: string, init: RequestInit = {}) {
   }
 
   let response: Response;
+  const url = joinApiPath(API_BASE_URL, path);
   try {
-    response = await fetch(joinApiPath(API_BASE_URL, path), {
+    response = await fetch(url, {
       ...init,
       headers,
     });
-  } catch {
+  } catch (error) {
+    console.error("Fetch API error:", { url, error });
     throw new Error("Không thể kết nối đến máy chủ. Kiểm tra backend và cấu hình API.");
   }
 

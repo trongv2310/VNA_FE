@@ -7,7 +7,7 @@ import { Button } from "@/libs/core/components/Button";
 import { Card, CardBody } from "@/libs/core/components/Card";
 import { Alert } from "@/libs/core/components/Alert";
 import { LoginAlert } from "@/components/auth/LoginAlert";
-import { Columns, Image as ImageIcon } from "lucide-react";
+import { Columns, Image as ImageIcon, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { login } from "../../services/api";
 import { CreateEnterprise } from "../../components/CreateEnterprise";
 
@@ -300,12 +300,30 @@ export const DepartmentLoginScreen: React.FC = () => {
       )}
 
       {toast && (
-        <div className={`fixed bottom-5 right-5 z-[100] px-5 py-3.5 rounded-xl shadow-lg font-bold text-sm animate-in fade-in slide-in-from-bottom-5 duration-300 flex items-center gap-2 ${
-          toast.type === "success" 
-            ? "bg-emerald-500 text-white shadow-emerald-500/20 border border-emerald-400" 
-            : "bg-red-500 text-white shadow-red-500/20 border border-red-400"
-        }`}>
-          <span>{toast.message}</span>
+        <div
+          className={`fixed top-6 left-1/2 z-[9999] flex items-center gap-4 rounded-xl px-5 py-3.5 text-sm font-semibold shadow-lg border select-none transition-all animate-in fade-in slide-in-from-top-5 duration-300 w-[min(480px,calc(100vw-32px))] -translate-x-1/2 ${
+            toast.type === "success"
+              ? "bg-[#e9ffd7] text-[#147a22] border-[#c2f0a5]"
+              : "bg-red-50 text-red-800 border-red-100"
+          }`}
+        >
+          {toast.type === "success" ? (
+            <CheckCircle2 className="h-5 w-5 flex-shrink-0 rounded-full bg-[#52d934] text-white" />
+          ) : (
+            <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-500 fill-white" />
+          )}
+          <span className="flex-1 pr-2">{toast.message}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className={`rounded-lg p-1 transition-colors ${
+              toast.type === "success"
+                ? "text-[#0f5132] hover:bg-black/5"
+                : "text-red-800 hover:bg-black/5"
+            }`}
+          >
+            <X className="h-4.5 w-4.5 stroke-[2.5]" />
+          </button>
         </div>
       )}
     </div>

@@ -163,23 +163,23 @@ const DEFAULT_REPORT_LIST: ReportData[] = [
         thietHaiTaiSan: "10.000.000"
       }
     ],
-    tc_tongSoVu: "2",
-    tc_soVuCoNguoiChet: "1",
-    tc_soVuHaiNguoiTroLen: "1",
-    tc_tongSoNguoiBiNan: "10",
-    tc_soLaoDongNuBiNan: "5",
-    tc_soNguoiChet: "5",
-    tc_soNguoiThuongNang: "10",
+    tc_tongSoVu: "0",
+    tc_soVuCoNguoiChet: "0",
+    tc_soVuHaiNguoiTroLen: "0",
+    tc_tongSoNguoiBiNan: "0",
+    tc_soLaoDongNuBiNan: "0",
+    tc_soNguoiChet: "0",
+    tc_soNguoiThuongNang: "0",
     tc_soNguoiBiNanKhongQL: "0",
     tc_laoDongNuBiNanKhongQL: "0",
     tc_soNguoiChetKhongQL: "0",
     tc_soNguoiThuongNangKhongQL: "0",
-    tc_chiPhiYTe: "10.000.000",
-    tc_chiPhiLuong: "10.000.000",
-    tc_chiPhiBoiThuong: "10.000.000",
-    tc_tongChiPhi: "30.000.000",
-    tc_soNgayNghi: "20",
-    tc_thietHaiTaiSan: "10.000.000"
+    tc_chiPhiYTe: "0",
+    tc_chiPhiLuong: "0",
+    tc_chiPhiBoiThuong: "0",
+    tc_tongChiPhi: "0",
+    tc_soNgayNghi: "0",
+    tc_thietHaiTaiSan: "0"
   },
   {
     id: 2,
@@ -292,6 +292,11 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   
   // Modals state
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [validationErrorsPopup, setValidationErrorsPopup] = useState<string[] | null>(null);
+
+  // File upload state for PDF report
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
 
   // Format Helper with dots
   const formatNumberWithDots = (val: string | number) => {
@@ -312,7 +317,34 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     const storedReports = localStorage.getItem("vna_reports_list");
     if (storedReports) {
       try {
-        setReports(JSON.parse(storedReports));
+        const parsed = JSON.parse(storedReports) as ReportData[];
+        const migrated = parsed.map(r => {
+          if (r.id === 1 && r.tc_tongSoVu === "2") {
+            return {
+              ...r,
+              tc_tongSoVu: "0",
+              tc_soVuCoNguoiChet: "0",
+              tc_soVuHaiNguoiTroLen: "0",
+              tc_tongSoNguoiBiNan: "0",
+              tc_soLaoDongNuBiNan: "0",
+              tc_soNguoiChet: "0",
+              tc_soNguoiThuongNang: "0",
+              tc_soNguoiBiNanKhongQL: "0",
+              tc_laoDongNuBiNanKhongQL: "0",
+              tc_soNguoiChetKhongQL: "0",
+              tc_soNguoiThuongNangKhongQL: "0",
+              tc_chiPhiYTe: "0",
+              tc_chiPhiLuong: "0",
+              tc_chiPhiBoiThuong: "0",
+              tc_tongChiPhi: "0",
+              tc_soNgayNghi: "0",
+              tc_thietHaiTaiSan: "0"
+            };
+          }
+          return r;
+        });
+        setReports(migrated);
+        localStorage.setItem("vna_reports_list", JSON.stringify(migrated));
       } catch (e) {
         console.error("Lỗi parse danh sách báo cáo từ localStorage", e);
       }
@@ -363,6 +395,18 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     }
   }, [formData]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== "application/pdf") {
+        showToast("Vui lòng chỉ tải lên tệp tin PDF", "error");
+        return;
+      }
+      setUploadedFileName(file.name);
+      showToast(`Tải lên tệp ${file.name} thành công!`, "success");
+    }
+  };
+
   // Handle Text inputs
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!formData || isReadOnly) return;
@@ -392,42 +436,61 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       // DYNAMIC ACCIDENT BLOCKS SYNCHRONIZATION
       if (name === "tongSoVu") {
         const count = Number(digitsOnly || 0);
-        const nextDetails = [...(prev.details || [])];
         
-        if (nextDetails.length < count) {
-          // Add missing blocks
-          for (let i = nextDetails.length; i < count; i++) {
-            nextDetails.push({
-              id: i + 1,
-              causeCategory: CAUSE_CATEGORIES[0],
-              factorCategory: FACTOR_CATEGORIES[0],
-              jobCategory: JOB_CATEGORIES[0],
-              tongSoVu: "1",
-              soVuCoNguoiChet: "0",
-              soVuHaiNguoiTroLen: "0",
-              tongSoNguoiBiNan: "0",
-              soLaoDongNuBiNan: "0",
-              soNguoiChet: "0",
-              soNguoiThuongNang: "0",
-              soNguoiBiNanKhongQL: "0",
-              laoDongNuBiNanKhongQL: "0",
-              soNguoiChetKhongQL: "0",
-              soNguoiThuongNangKhongQL: "0",
-              chiPhiYTe: "0",
-              chiPhiLuong: "0",
-              chiPhiBoiThuong: "0",
-              tongChiPhi: "0",
-              soNgayNghi: "0",
-              thietHaiTaiSan: "0"
-            });
-            setExpandedBlocks(ex => ({ ...ex, [i + 1]: true }));
+        if (count === 0) {
+          updated.soVuCoNguoiChet = "0";
+          updated.soVuHaiNguoiTroLen = "0";
+          updated.tongSoNguoiBiNan = "0";
+          updated.soLaoDongNuBiNan = "0";
+          updated.soNguoiChet = "0";
+          updated.soNguoiThuongNang = "0";
+          updated.soNguoiBiNanKhongQL = "0";
+          updated.laoDongNuBiNanKhongQL = "0";
+          updated.soNguoiChetKhongQL = "0";
+          updated.soNguoiThuongNangKhongQL = "0";
+          updated.chiPhiYTe = "0";
+          updated.chiPhiLuong = "0";
+          updated.chiPhiBoiThuong = "0";
+          updated.tongChiPhi = "0";
+          updated.soNgayNghi = "0";
+          updated.thietHaiTaiSan = "0";
+          updated.details = [];
+        } else {
+          const nextDetails = [...(prev.details || [])];
+          if (nextDetails.length < count) {
+            // Add missing blocks
+            for (let i = nextDetails.length; i < count; i++) {
+              nextDetails.push({
+                id: i + 1,
+                causeCategory: CAUSE_CATEGORIES[0],
+                factorCategory: FACTOR_CATEGORIES[0],
+                jobCategory: JOB_CATEGORIES[0],
+                tongSoVu: "1",
+                soVuCoNguoiChet: "0",
+                soVuHaiNguoiTroLen: "0",
+                tongSoNguoiBiNan: "0",
+                soLaoDongNuBiNan: "0",
+                soNguoiChet: "0",
+                soNguoiThuongNang: "0",
+                soNguoiBiNanKhongQL: "0",
+                laoDongNuBiNanKhongQL: "0",
+                soNguoiChetKhongQL: "0",
+                soNguoiThuongNangKhongQL: "0",
+                chiPhiYTe: "0",
+                chiPhiLuong: "0",
+                chiPhiBoiThuong: "0",
+                tongChiPhi: "0",
+                soNgayNghi: "0",
+                thietHaiTaiSan: "0"
+              });
+              setExpandedBlocks(ex => ({ ...ex, [i + 1]: true }));
+            }
+          } else if (nextDetails.length > count) {
+            // Remove excess blocks
+            nextDetails.splice(count);
           }
-        } else if (nextDetails.length > count) {
-          // Remove excess blocks
-          nextDetails.splice(count);
+          updated.details = nextDetails;
         }
-        
-        updated.details = nextDetails;
       }
 
       return updated;
@@ -535,7 +598,35 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     if (!formData || isReadOnly) return;
     const { name, value } = e.target;
     const digitsOnly = value.replace(/\D/g, "");
-    setFormData(prev => prev ? ({ ...prev, [name]: digitsOnly }) : null);
+    
+    setFormData(prev => {
+      if (!prev) return null;
+      let updated = { ...prev, [name]: digitsOnly };
+
+      if (name === "tc_tongSoVu") {
+        const count = Number(digitsOnly || 0);
+        if (count === 0) {
+          updated.tc_soVuCoNguoiChet = "0";
+          updated.tc_soVuHaiNguoiTroLen = "0";
+          updated.tc_tongSoNguoiBiNan = "0";
+          updated.tc_soLaoDongNuBiNan = "0";
+          updated.tc_soNguoiChet = "0";
+          updated.tc_soNguoiThuongNang = "0";
+          updated.tc_soNguoiBiNanKhongQL = "0";
+          updated.tc_laoDongNuBiNanKhongQL = "0";
+          updated.tc_soNguoiChetKhongQL = "0";
+          updated.tc_soNguoiThuongNangKhongQL = "0";
+          updated.tc_chiPhiYTe = "0";
+          updated.tc_chiPhiLuong = "0";
+          updated.tc_chiPhiBoiThuong = "0";
+          updated.tc_tongChiPhi = "0";
+          updated.tc_soNgayNghi = "0";
+          updated.tc_thietHaiTaiSan = "0";
+        }
+      }
+
+      return updated;
+    });
 
     if (errors[name]) {
       setErrors(prev => {
@@ -552,19 +643,129 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   };
 
   // Validation function for current step
-  const validateSection = (sec: ReportSection): boolean => {
+  const validateSection = (sec: ReportSection, onlyTotals: boolean = false): boolean => {
     if (!formData) return false;
     const newErrors: Record<string, string> = {};
+    const popupMsgs: string[] = [];
+
+    const getInt = (val: any) => {
+      if (typeof val === "number") return val;
+      if (!val) return 0;
+      return Number(String(val).replace(/\D/g, "")) || 0;
+    };
+
+    const getMoney = (val: any) => {
+      if (typeof val === "number") return val;
+      if (!val) return 0;
+      return Number(String(val).replace(/\./g, "")) || 0;
+    };
+
+    const checkCounts = (prefix: string, dataObj: any, errorsObj: Record<string, string>, msgs: string[], sectionName: string) => {
+      const getVal = (f: string) => getInt(dataObj[prefix + f]);
+      
+      const tongSoVu = getVal("tongSoVu");
+      const soVuCoNguoiChet = getVal("soVuCoNguoiChet");
+      const soVuHaiNguoiTroLen = getVal("soVuHaiNguoiTroLen");
+      const tongSoNguoiBiNan = getVal("tongSoNguoiBiNan");
+      const soLaoDongNuBiNan = getVal("soLaoDongNuBiNan");
+      const soNguoiChet = getVal("soNguoiChet");
+      const soNguoiThuongNang = getVal("soNguoiThuongNang");
+      const soNguoiBiNanKhongQL = getVal("soNguoiBiNanKhongQL");
+      const laoDongNuBiNanKhongQL = getVal("laoDongNuBiNanKhongQL");
+      const soNguoiChetKhongQL = getVal("soNguoiChetKhongQL");
+      const soNguoiThuongNangKhongQL = getVal("soNguoiThuongNangKhongQL");
+
+      const baseTotalWorkers = getInt(formData.laoDongCoSo);
+      const baseFemaleWorkers = getInt(formData.laoDongNu);
+
+      if (tongSoNguoiBiNan > baseTotalWorkers) {
+        errorsObj[prefix + "tongSoNguoiBiNan"] = "Vượt quá tổng số lao động";
+        msgs.push(`${sectionName}: Tổng số người bị nạn (${tongSoNguoiBiNan}) không được lớn hơn tổng số lao động của cơ sở (${baseTotalWorkers})`);
+      }
+      if (soLaoDongNuBiNan > baseFemaleWorkers) {
+        errorsObj[prefix + "soLaoDongNuBiNan"] = "Vượt quá số lao động nữ";
+        msgs.push(`${sectionName}: Số lao động nữ bị nạn (${soLaoDongNuBiNan}) không được lớn hơn tổng số lao động nữ của cơ sở (${baseFemaleWorkers})`);
+      }
+
+      if (soVuCoNguoiChet > tongSoVu) {
+        errorsObj[prefix + "soVuCoNguoiChet"] = "Lớn hơn tổng số vụ";
+        msgs.push(`${sectionName}: Số vụ có người chết (${soVuCoNguoiChet}) không được lớn hơn tổng số vụ (${tongSoVu})`);
+      }
+      if (soVuHaiNguoiTroLen > tongSoVu) {
+        errorsObj[prefix + "soVuHaiNguoiTroLen"] = "Lớn hơn tổng số vụ";
+        msgs.push(`${sectionName}: Số vụ có từ 2 người bị nạn trở lên (${soVuHaiNguoiTroLen}) không được lớn hơn tổng số vụ (${tongSoVu})`);
+      }
+      if (soLaoDongNuBiNan > tongSoNguoiBiNan) {
+        errorsObj[prefix + "soLaoDongNuBiNan"] = "Lớn hơn tổng số người bị nạn";
+        msgs.push(`${sectionName}: Số lao động nữ bị nạn (${soLaoDongNuBiNan}) không được lớn hơn tổng số người bị nạn (${tongSoNguoiBiNan})`);
+      }
+      if (soNguoiChet > tongSoNguoiBiNan) {
+        errorsObj[prefix + "soNguoiChet"] = "Lớn hơn tổng số người bị nạn";
+        msgs.push(`${sectionName}: Số người bị chết (${soNguoiChet}) không được lớn hơn tổng số người bị nạn (${tongSoNguoiBiNan})`);
+      }
+      if (soNguoiThuongNang > tongSoNguoiBiNan) {
+        errorsObj[prefix + "soNguoiThuongNang"] = "Lớn hơn tổng số người bị nạn";
+        msgs.push(`${sectionName}: Số người bị thương nặng (${soNguoiThuongNang}) không được lớn hơn tổng số người bị nạn (${tongSoNguoiBiNan})`);
+      }
+      if (soNguoiChet + soNguoiThuongNang > tongSoNguoiBiNan) {
+        errorsObj[prefix + "soNguoiChet"] = "Tổng chết + thương nặng vượt quá số người bị nạn";
+        errorsObj[prefix + "soNguoiThuongNang"] = "Tổng chết + thương nặng vượt quá số người bị nạn";
+        msgs.push(`${sectionName}: Tổng số người chết và thương nặng (${soNguoiChet + soNguoiThuongNang}) không được lớn hơn tổng số người bị nạn (${tongSoNguoiBiNan})`);
+      }
+      if (soNguoiBiNanKhongQL > tongSoNguoiBiNan) {
+        errorsObj[prefix + "soNguoiBiNanKhongQL"] = "Lớn hơn tổng số người bị nạn";
+        msgs.push(`${sectionName}: Số người bị nạn không thuộc quyền quản lý (${soNguoiBiNanKhongQL}) không được lớn hơn tổng số người bị nạn (${tongSoNguoiBiNan})`);
+      }
+      if (laoDongNuBiNanKhongQL > soNguoiBiNanKhongQL) {
+        errorsObj[prefix + "laoDongNuBiNanKhongQL"] = "Vượt quá số người bị nạn không QL";
+        msgs.push(`${sectionName}: Lao động nữ bị nạn không thuộc quyền quản lý (${laoDongNuBiNanKhongQL}) không được lớn hơn số người bị nạn không thuộc quyền quản lý (${soNguoiBiNanKhongQL})`);
+      }
+      if (laoDongNuBiNanKhongQL > soLaoDongNuBiNan) {
+        errorsObj[prefix + "laoDongNuBiNanKhongQL"] = "Vượt quá tổng số lao động nữ bị nạn";
+        msgs.push(`${sectionName}: Lao động nữ bị nạn không thuộc quyền quản lý (${laoDongNuBiNanKhongQL}) không được lớn hơn tổng số lao động nữ bị nạn (${soLaoDongNuBiNan})`);
+      }
+      if (soNguoiChetKhongQL > soNguoiChet) {
+        errorsObj[prefix + "soNguoiChetKhongQL"] = "Vượt quá tổng số người chết";
+        msgs.push(`${sectionName}: Số người chết không thuộc quyền quản lý (${soNguoiChetKhongQL}) không được lớn hơn tổng số người chết (${soNguoiChet})`);
+      }
+      if (soNguoiChetKhongQL > soNguoiBiNanKhongQL) {
+        errorsObj[prefix + "soNguoiChetKhongQL"] = "Vượt quá số người bị nạn không QL";
+        msgs.push(`${sectionName}: Số người chết không thuộc quyền quản lý (${soNguoiChetKhongQL}) không được lớn hơn số người bị nạn không thuộc quyền quản lý (${soNguoiBiNanKhongQL})`);
+      }
+      if (soNguoiThuongNangKhongQL > soNguoiThuongNang) {
+        errorsObj[prefix + "soNguoiThuongNangKhongQL"] = "Vượt quá tổng số người thương nặng";
+        msgs.push(`${sectionName}: Số người thương nặng không thuộc quyền quản lý (${soNguoiThuongNangKhongQL}) không được lớn hơn tổng số người thương nặng (${soNguoiThuongNang})`);
+      }
+      if (soNguoiThuongNangKhongQL > soNguoiBiNanKhongQL) {
+        errorsObj[prefix + "soNguoiThuongNangKhongQL"] = "Vượt quá số người bị nạn không QL";
+        msgs.push(`${sectionName}: Số người thương nặng không thuộc quyền quản lý (${soNguoiThuongNangKhongQL}) không được lớn hơn số người bị nạn không thuộc quyền quản lý (${soNguoiBiNanKhongQL})`);
+      }
+      if (soNguoiChetKhongQL + soNguoiThuongNangKhongQL > soNguoiBiNanKhongQL) {
+        errorsObj[prefix + "soNguoiChetKhongQL"] = "Tổng vượt quá số người bị nạn không QL";
+        errorsObj[prefix + "soNguoiThuongNangKhongQL"] = "Tổng vượt quá số người bị nạn không QL";
+        msgs.push(`${sectionName}: Tổng số người chết và thương nặng không thuộc quyền quản lý (${soNguoiChetKhongQL + soNguoiThuongNangKhongQL}) không được lớn hơn số người bị nạn không thuộc quyền quản lý (${soNguoiBiNanKhongQL})`);
+      }
+    };
 
     if (sec === "enterprise-info") {
-      if (!formData.laoDongCoSo) newErrors.laoDongCoSo = "Vui lòng nhập tổng số lao động";
-      if (!formData.laoDongNu) newErrors.laoDongNu = "Vui lòng nhập tổng số lao động nữ";
-      if (!formData.quyLuong) newErrors.quyLuong = "Vui lòng nhập tổng quỹ lương";
+      if (!formData.laoDongCoSo) {
+        newErrors.laoDongCoSo = "Bắt buộc";
+        popupMsgs.push("Thông tin công ty: Vui lòng nhập tổng số lao động");
+      }
+      if (!formData.laoDongNu) {
+        newErrors.laoDongNu = "Bắt buộc";
+        popupMsgs.push("Thông tin công ty: Vui lòng nhập tổng số lao động nữ");
+      }
+      if (!formData.quyLuong) {
+        newErrors.quyLuong = "Bắt buộc";
+        popupMsgs.push("Thông tin công ty: Vui lòng nhập tổng quỹ lương");
+      }
 
-      const total = Number(formData.laoDongCoSo || 0);
-      const nu = Number(formData.laoDongNu || 0);
+      const total = getInt(formData.laoDongCoSo);
+      const nu = getInt(formData.laoDongNu);
       if (nu > total) {
         newErrors.laoDongNu = "Số lao động nữ không được vượt quá tổng số lao động";
+        popupMsgs.push(`Thông tin công ty: Số lao động nữ (${nu}) không được lớn hơn tổng số lao động (${total})`);
       }
     } else if (sec === "accident-stats") {
       // 1. Validate general statistics (Tab 1 fields)
@@ -574,56 +775,181 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         "laoDongNuBiNanKhongQL", "soNguoiChetKhongQL", "soNguoiThuongNangKhongQL"
       ];
       countFields.forEach(f => {
-        if (!formData[f as keyof ReportData]) {
+        if (formData[f as keyof ReportData] === undefined || formData[f as keyof ReportData] === null || String(formData[f as keyof ReportData]).trim() === "") {
           newErrors[f] = "Bắt buộc";
+          popupMsgs.push(`1. Tai nạn lao động (Tổng số): Trường số liệu "${f}" bắt buộc phải nhập`);
         }
       });
 
       const costFields = ["chiPhiYTe", "chiPhiLuong", "chiPhiBoiThuong", "soNgayNghi"];
       costFields.forEach(f => {
-        if (!formData[f as keyof ReportData]) {
+        if (formData[f as keyof ReportData] === undefined || formData[f as keyof ReportData] === null || String(formData[f as keyof ReportData]).trim() === "") {
           newErrors[f] = "Bắt buộc";
+          popupMsgs.push(`1. Tai nạn lao động (Thiệt hại): Trường số liệu "${f}" bắt buộc phải nhập`);
         }
       });
 
-      const tongVu = Number(formData.tongSoVu || 0);
-      const vuChet = Number(formData.soVuCoNguoiChet || 0);
-      if (vuChet > tongVu) {
-        newErrors.soVuCoNguoiChet = "Số vụ có người chết không thể lớn hơn tổng số vụ";
+      // Apply inner counts logic rules on Section 2 totals
+      checkCounts("", formData, newErrors, popupMsgs, "1. Tai nạn lao động (Tổng số)");
+
+      const tongVu = getInt(formData.tongSoVu);
+
+      // Auto-inherit if tongSoVu === 1
+      if (tongVu === 1 && formData.details && formData.details.length === 1 && !onlyTotals) {
+        const firstBlock = formData.details[0];
+        const isDifferent =
+          firstBlock.soVuCoNguoiChet !== formData.soVuCoNguoiChet ||
+          firstBlock.soVuHaiNguoiTroLen !== formData.soVuHaiNguoiTroLen ||
+          firstBlock.tongSoNguoiBiNan !== formData.tongSoNguoiBiNan ||
+          firstBlock.soLaoDongNuBiNan !== formData.soLaoDongNuBiNan ||
+          firstBlock.soNguoiChet !== formData.soNguoiChet ||
+          firstBlock.soNguoiThuongNang !== formData.soNguoiThuongNang ||
+          firstBlock.soNguoiBiNanKhongQL !== formData.soNguoiBiNanKhongQL ||
+          firstBlock.laoDongNuBiNanKhongQL !== formData.laoDongNuBiNanKhongQL ||
+          firstBlock.soNguoiChetKhongQL !== formData.soNguoiChetKhongQL ||
+          firstBlock.soNguoiThuongNangKhongQL !== formData.soNguoiThuongNangKhongQL ||
+          firstBlock.chiPhiYTe !== formData.chiPhiYTe ||
+          firstBlock.chiPhiLuong !== formData.chiPhiLuong ||
+          firstBlock.chiPhiBoiThuong !== formData.chiPhiBoiThuong ||
+          firstBlock.tongChiPhi !== formData.tongChiPhi ||
+          firstBlock.soNgayNghi !== formData.soNgayNghi ||
+          firstBlock.thietHaiTaiSan !== formData.thietHaiTaiSan;
+
+        if (isDifferent) {
+          const updatedDetails = [{
+            ...firstBlock,
+            tongSoVu: "1",
+            soVuCoNguoiChet: formData.soVuCoNguoiChet,
+            soVuHaiNguoiTroLen: formData.soVuHaiNguoiTroLen,
+            tongSoNguoiBiNan: formData.tongSoNguoiBiNan,
+            soLaoDongNuBiNan: formData.soLaoDongNuBiNan,
+            soNguoiChet: formData.soNguoiChet,
+            soNguoiThuongNang: formData.soNguoiThuongNang,
+            soNguoiBiNanKhongQL: formData.soNguoiBiNanKhongQL,
+            laoDongNuBiNanKhongQL: formData.laoDongNuBiNanKhongQL,
+            soNguoiChetKhongQL: formData.soNguoiChetKhongQL,
+            soNguoiThuongNangKhongQL: formData.soNguoiThuongNangKhongQL,
+            chiPhiYTe: formData.chiPhiYTe,
+            chiPhiLuong: formData.chiPhiLuong,
+            chiPhiBoiThuong: formData.chiPhiBoiThuong,
+            tongChiPhi: formData.tongChiPhi,
+            soNgayNghi: formData.soNgayNghi,
+            thietHaiTaiSan: formData.thietHaiTaiSan,
+          }];
+          formData.details = updatedDetails;
+          setFormData({ ...formData });
+        }
       }
 
       // 2. Validate dynamic accident detail blocks if tongSoVu > 0
-      if (tongVu > 0) {
+      if (tongVu > 0 && !onlyTotals) {
         let blockHasError = false;
-        const newBlockErrors: Record<number, Record<string, string>> = {};
+        const localBlockErrors: Record<number, Record<string, string>> = {};
 
         (formData.details || []).forEach((block, idx) => {
           const blockErrs: Record<string, string> = {};
-          
+          const blockMsgs: string[] = [];
+
           countFields.forEach(f => {
-            if (!block[f as keyof AccidentDetailBlock]) {
+            if (block[f as keyof AccidentDetailBlock] === undefined || block[f as keyof AccidentDetailBlock] === null || String(block[f as keyof AccidentDetailBlock]).trim() === "") {
               blockErrs[f] = "Bắt buộc";
               blockHasError = true;
             }
           });
 
           costFields.forEach(f => {
-            if (!block[f as keyof AccidentDetailBlock]) {
+            if (block[f as keyof AccidentDetailBlock] === undefined || block[f as keyof AccidentDetailBlock] === null || String(block[f as keyof AccidentDetailBlock]).trim() === "") {
               blockErrs[f] = "Bắt buộc";
               blockHasError = true;
             }
           });
 
           if (Object.keys(blockErrs).length > 0) {
-            newBlockErrors[idx] = blockErrs;
-            setExpandedBlocks(prev => ({ ...prev, [idx + 1]: true }));
+            blockMsgs.push(`Vui lòng điền đầy đủ tất cả các trường bắt buộc.`);
+          }
+
+          // Apply inner counts logic rules on the block
+          checkCounts("", block, blockErrs, blockMsgs, `Vụ tai nạn số ${idx + 1}`);
+
+          if (Object.keys(blockErrs).length > 0 || blockMsgs.length > 0) {
+            localBlockErrors[idx] = blockErrs;
+            popupMsgs.push(...blockMsgs);
+            blockHasError = true;
           }
         });
 
         if (blockHasError) {
-          setBlockErrors(newBlockErrors);
-          showToast("Vui lòng nhập đầy đủ thông tin chi tiết các vụ tai nạn lao động trước khi tiếp tục.", "error");
+          setBlockErrors(localBlockErrors);
+          setErrors(newErrors);
+          setValidationErrorsPopup(popupMsgs);
           setActiveTab("details");
+          // Expand the first block with error
+          const firstErrIdx = Object.keys(localBlockErrors).map(Number).sort((a,b) => a - b)[0];
+          if (firstErrIdx !== undefined) {
+            setExpandedBlocks(prev => ({ ...prev, [firstErrIdx + 1]: true }));
+          }
+          return false;
+        }
+
+        // Compare sum of details with totals in Tab 1
+        let hasComparisonError = false;
+        const compareFields = [
+          { name: "soVuCoNguoiChet", label: "Số vụ có người chết" },
+          { name: "soVuHaiNguoiTroLen", label: "Số vụ có từ 2 người bị nạn trở lên" },
+          { name: "tongSoNguoiBiNan", label: "Tổng số người bị nạn" },
+          { name: "soLaoDongNuBiNan", label: "Tổng số lao động nữ bị nạn" },
+          { name: "soNguoiChet", label: "Tổng số người bị chết" },
+          { name: "soNguoiThuongNang", label: "Tổng số người bị thương nặng" },
+          { name: "soNguoiBiNanKhongQL", label: "Số người bị nạn không QL" },
+          { name: "laoDongNuBiNanKhongQL", label: "Lao động nữ bị nạn không QL" },
+          { name: "soNguoiChetKhongQL", label: "Số người chết không QL" },
+          { name: "soNguoiThuongNangKhongQL", label: "Người bị thương nặng không QL" },
+          { name: "soNgayNghi", label: "Tổng số ngày nghỉ vì TNLĐ" }
+        ];
+
+        compareFields.forEach(f => {
+          const totalInTab1 = getInt(formData[f.name as keyof ReportData]);
+          const sumInDetails = sumBlocks(f.name as keyof AccidentDetailBlock);
+          if (totalInTab1 !== sumInDetails) {
+            hasComparisonError = true;
+            (formData.details || []).forEach((_, idx) => {
+              if (!localBlockErrors[idx]) {
+                localBlockErrors[idx] = {};
+              }
+              localBlockErrors[idx][f.name] = `Khác tổng Tab 1 (${totalInTab1})`;
+            });
+            popupMsgs.push(`1. Tai nạn lao động: ${f.label} đã khai báo ở Tab 1 (${totalInTab1}) không khớp với tổng số liệu chi tiết trong Tab 2 (${sumInDetails})`);
+          }
+        });
+        
+        // Compare money fields
+        const compareMoneyFields = [
+          { name: "chiPhiYTe", label: "Chi phí y tế" },
+          { name: "chiPhiLuong", label: "Chi phí trả lương trong thời gian điều trị" },
+          { name: "chiPhiBoiThuong", label: "Chi phí bồi thường trợ cấp" },
+          { name: "thietHaiTaiSan", label: "Thiệt hại tài sản" }
+        ];
+        compareMoneyFields.forEach(f => {
+          const totalInTab1 = getMoney(formData[f.name as keyof ReportData]);
+          const sumInDetails = sumBlocks(f.name as keyof AccidentDetailBlock);
+          if (totalInTab1 !== sumInDetails) {
+            hasComparisonError = true;
+            (formData.details || []).forEach((_, idx) => {
+              if (!localBlockErrors[idx]) {
+                localBlockErrors[idx] = {};
+              }
+              localBlockErrors[idx][f.name] = `Khác tổng Tab 1 (${formatNumberWithDots(totalInTab1)})`;
+            });
+            popupMsgs.push(`1. Tai nạn lao động: ${f.label} đã khai báo ở Tab 1 (${formatNumberWithDots(totalInTab1)}) không khớp với tổng số liệu chi tiết trong Tab 2 (${formatNumberWithDots(sumInDetails)})`);
+          }
+        });
+
+        if (hasComparisonError) {
+          setBlockErrors(localBlockErrors);
+          setErrors(newErrors);
+          setValidationErrorsPopup(popupMsgs);
+          setActiveTab("details");
+          setExpandedBlocks(prev => ({ ...prev, 1: true }));
           return false;
         }
       }
@@ -635,15 +961,60 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         "tc_chiPhiYTe", "tc_chiPhiLuong", "tc_chiPhiBoiThuong", "tc_soNgayNghi"
       ];
       tcFields.forEach(f => {
-        if (!formData[f as keyof ReportData]) {
+        if (formData[f as keyof ReportData] === undefined || formData[f as keyof ReportData] === null || String(formData[f as keyof ReportData]).trim() === "") {
           newErrors[f] = "Bắt buộc";
+          popupMsgs.push(`2. Trợ cấp (Quy định khoản 2): Trường số liệu "${f}" bắt buộc phải nhập`);
+        }
+      });
+
+      // Apply inner counts logic rules on Section 3 totals (tc_ prefix)
+      checkCounts("tc_", formData, newErrors, popupMsgs, "2. Trợ cấp (Quy định khoản 2)");
+
+      // Compare Section 3 fields with corresponding Section 2 fields (must be <=)
+      const compareSubsets = [
+        { tc: "tc_tongSoVu", nonTc: "tongSoVu", label: "Tổng số vụ" },
+        { tc: "tc_soVuCoNguoiChet", nonTc: "soVuCoNguoiChet", label: "Số vụ có người chết" },
+        { tc: "tc_soVuHaiNguoiTroLen", nonTc: "soVuHaiNguoiTroLen", label: "Số vụ từ 2 người bị nạn trở lên" },
+        { tc: "tc_tongSoNguoiBiNan", nonTc: "tongSoNguoiBiNan", label: "Tổng số người bị nạn" },
+        { tc: "tc_soLaoDongNuBiNan", nonTc: "soLaoDongNuBiNan", label: "Tổng số lao động nữ bị nạn" },
+        { tc: "tc_soNguoiChet", nonTc: "soNguoiChet", label: "Tổng số người bị chết" },
+        { tc: "tc_soNguoiThuongNang", nonTc: "soNguoiThuongNang", label: "Tổng số người bị thương nặng" },
+        { tc: "tc_soNguoiBiNanKhongQL", nonTc: "soNguoiBiNanKhongQL", label: "Số người bị nạn không QL" },
+        { tc: "tc_laoDongNuBiNanKhongQL", nonTc: "laoDongNuBiNanKhongQL", label: "Lao động nữ bị nạn không QL" },
+        { tc: "tc_soNguoiChetKhongQL", nonTc: "soNguoiChetKhongQL", label: "Số người chết không QL" },
+        { tc: "tc_soNguoiThuongNangKhongQL", nonTc: "soNguoiThuongNangKhongQL", label: "Người bị thương nặng không QL" },
+        { tc: "tc_soNgayNghi", nonTc: "soNgayNghi", label: "Tổng số ngày nghỉ vì TNLĐ" }
+      ];
+
+      compareSubsets.forEach(item => {
+        const tcVal = getInt(formData[item.tc as keyof ReportData]);
+        const nonTcVal = getInt(formData[item.nonTc as keyof ReportData]);
+        if (tcVal > nonTcVal) {
+          newErrors[item.tc] = "Lớn hơn số liệu tổng";
+          popupMsgs.push(`2. Trợ cấp (Quy định khoản 2): ${item.label} được hưởng trợ cấp (${tcVal}) không được lớn hơn tổng số liệu tai nạn đã khai báo (${nonTcVal})`);
+        }
+      });
+
+      const compareMoneySubsets = [
+        { tc: "tc_chiPhiYTe", nonTc: "chiPhiYTe", label: "Chi phí y tế" },
+        { tc: "tc_chiPhiLuong", nonTc: "chiPhiLuong", label: "Chi phí trả lương trong thời gian điều trị" },
+        { tc: "tc_chiPhiBoiThuong", nonTc: "chiPhiBoiThuong", label: "Chi phí bồi thường trợ cấp" },
+        { tc: "tc_thietHaiTaiSan", nonTc: "thietHaiTaiSan", label: "Thiệt hại tài sản" }
+      ];
+
+      compareMoneySubsets.forEach(item => {
+        const tcVal = getMoney(formData[item.tc as keyof ReportData]);
+        const nonTcVal = getMoney(formData[item.nonTc as keyof ReportData]);
+        if (tcVal > nonTcVal) {
+          newErrors[item.tc] = "Lớn hơn số liệu tổng";
+          popupMsgs.push(`2. Trợ cấp (Quy định khoản 2): ${item.label} được hưởng trợ cấp (${formatNumberWithDots(tcVal)}) không được lớn hơn tổng số liệu tai nạn đã khai báo (${formatNumberWithDots(nonTcVal)})`);
         }
       });
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-      showToast("Vui lòng kiểm tra lại các trường thông tin lỗi đỏ", "error");
+    if (popupMsgs.length > 0) {
+      setValidationErrorsPopup(popupMsgs);
       return false;
     }
     return true;
@@ -654,10 +1025,19 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       if (currentSection === "enterprise-info") {
         setCurrentSection("accident-stats");
       } else if (currentSection === "accident-stats") {
-        setCurrentSection("accident-benefits");
+        if (activeTab === "totals") {
+          setActiveTab("details");
+        } else {
+          setCurrentSection("accident-benefits");
+        }
       } else if (currentSection === "accident-benefits") {
         setCurrentSection("general-view");
       }
+      return;
+    }
+
+    if (currentSection === "accident-stats" && activeTab === "totals") {
+      switchToDetailsTab();
       return;
     }
 
@@ -670,6 +1050,57 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       } else if (currentSection === "accident-benefits") {
         setCurrentSection("general-view");
       }
+    }
+  };
+
+  const handleBack = () => {
+    if (currentSection === "general-view") {
+      setCurrentSection("accident-benefits");
+    } else if (currentSection === "accident-benefits") {
+      setCurrentSection("accident-stats");
+      setActiveTab("details");
+    } else if (currentSection === "accident-stats") {
+      if (activeTab === "details") {
+        setActiveTab("totals");
+      } else {
+        setCurrentSection("enterprise-info");
+      }
+    } else if (currentSection === "enterprise-info") {
+      setViewMode("list");
+    }
+  };
+
+  const switchToDetailsTab = () => {
+    if (!formData) return;
+    if (validateSection("accident-stats", true)) {
+      const tongVu = Number(formData.tongSoVu || 0);
+      if (tongVu === 1 && formData.details && formData.details.length === 1) {
+        setFormData(prev => {
+          if (!prev) return null;
+          const updatedDetails = [{
+            ...prev.details[0],
+            tongSoVu: "1",
+            soVuCoNguoiChet: prev.soVuCoNguoiChet,
+            soVuHaiNguoiTroLen: prev.soVuHaiNguoiTroLen,
+            tongSoNguoiBiNan: prev.tongSoNguoiBiNan,
+            soLaoDongNuBiNan: prev.soLaoDongNuBiNan,
+            soNguoiChet: prev.soNguoiChet,
+            soNguoiThuongNang: prev.soNguoiThuongNang,
+            soNguoiBiNanKhongQL: prev.soNguoiBiNanKhongQL,
+            laoDongNuBiNanKhongQL: prev.laoDongNuBiNanKhongQL,
+            soNguoiChetKhongQL: prev.soNguoiChetKhongQL,
+            soNguoiThuongNangKhongQL: prev.soNguoiThuongNangKhongQL,
+            chiPhiYTe: prev.chiPhiYTe,
+            chiPhiLuong: prev.chiPhiLuong,
+            chiPhiBoiThuong: prev.chiPhiBoiThuong,
+            tongChiPhi: prev.tongChiPhi,
+            soNgayNghi: prev.soNgayNghi,
+            thietHaiTaiSan: prev.thietHaiTaiSan,
+          }];
+          return { ...prev, details: updatedDetails };
+        });
+      }
+      setActiveTab("details");
     }
   };
 
@@ -738,7 +1169,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
 
   // Actions in General View
   const handlePrint = () => {
-    showToast("Đang kết xuất in file báo cáo tình hình tai nạn lao động...", "success");
+    window.print();
   };
 
   const handleSubmitReport = () => {
@@ -813,18 +1244,18 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   const renderCauseRow = (title: string, code: string) => {
     return (
       <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-        <td className="p-3 text-left pl-8">{title}</td>
-        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold">{code}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "tongSoVu")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soVuCoNguoiChet")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soVuHaiNguoiTroLen")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "tongSoNguoiBiNan")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soNguoiBiNanKhongQL")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soLaoDongNuBiNan")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "laoDongNuBiNanKhongQL")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soNguoiChet")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soNguoiChetKhongQL")}</td>
-        <td className="p-3 text-center">{sumBlocksByCause(title, "soNguoiThuongNang")}</td>
+        <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{title}</td>
+        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "tongSoVu")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soVuCoNguoiChet")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soVuHaiNguoiTroLen")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "tongSoNguoiBiNan")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soNguoiBiNanKhongQL")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soLaoDongNuBiNan")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "laoDongNuBiNanKhongQL")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soNguoiChet")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soNguoiChetKhongQL")}</td>
+        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByCause(title, "soNguoiThuongNang")}</td>
         <td className="p-3 text-center">{sumBlocksByCause(title, "soNguoiThuongNangKhongQL")}</td>
       </tr>
     );
@@ -1042,8 +1473,13 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                     <span>In báo cáo</span>
                   </button>
                   <button
+                    disabled={!uploadedFileName}
                     onClick={handleSubmitReport}
-                    className="flex items-center gap-1.5 px-6 py-2 bg-blue-600 hover:bg-blue-750 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer"
+                    className={`flex items-center gap-1.5 px-6 py-2 rounded-xl font-bold text-sm transition-all ${
+                      uploadedFileName
+                        ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md active:scale-98 cursor-pointer"
+                        : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed opacity-60"
+                    }`}
                   >
                     <Send className="w-4 h-4" />
                     <span>Gửi báo cáo</span>
@@ -1267,7 +1703,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveTab("details")}
+                    onClick={switchToDetailsTab}
                     className={`px-5 py-3 text-xs font-bold relative transition-all cursor-pointer rounded-t-xl border-t border-x ${
                       activeTab === "details"
                         ? "text-white bg-blue-600 border-blue-600 dark:bg-blue-700 dark:border-blue-700"
@@ -1723,7 +2159,46 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           {/* SECTION 4: REDESIGNED GENERAL VIEW TABLES */}
           {/* ========================================== */}
           {currentSection === "general-view" && (
-            <div className="flex flex-col gap-6 select-none animate-in fade-in duration-200">
+            <div className="printable-report-wrapper flex flex-col gap-6 select-none animate-in fade-in duration-200">
+              <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                  /* Reset parent heights and overflows to enable full page printing */
+                  html, body, #__next, .h-screen, .overflow-hidden, main, .overflow-y-auto, [class*="h-screen"], [class*="overflow-hidden"], [class*="overflow-y-auto"] {
+                    height: auto !important;
+                    overflow: visible !important;
+                    position: static !important;
+                  }
+                  body * {
+                    visibility: hidden;
+                  }
+                  .printable-report-wrapper,
+                  .printable-report-wrapper * {
+                    visibility: visible;
+                  }
+                  .printable-report-wrapper {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    background: white !important;
+                    color: black !important;
+                    padding: 0px !important;
+                    margin: 0px !important;
+                  }
+                  .no-print {
+                    display: none !important;
+                  }
+                  table {
+                    border-collapse: collapse !important;
+                    width: 100% !important;
+                  }
+                  th, td {
+                    border: 1px solid #000 !important;
+                    font-size: 10px !important;
+                    padding: 4px !important;
+                  }
+                }
+              `}} />
               {/* Header Title */}
               <div className="border-b border-zinc-200 dark:border-zinc-800 pb-3">
                 <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-150">
@@ -1732,22 +2207,33 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               </div>
 
               {/* Red file attachment note */}
-              <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 flex-wrap">
+              <div className="no-print text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 flex-wrap">
                 <span className="text-red-500 font-extrabold text-sm">**</span>
                 <span className="text-red-500">Vui lòng đính kèm báo cáo TNLĐ có dấu mộc công ty:</span>
                 <button
                   type="button"
-                  onClick={() => showToast("Mở chọn tệp tải lên...", "success")}
+                  onClick={() => fileInputRef.current?.click()}
                   className="text-blue-600 hover:text-blue-700 underline font-bold cursor-pointer transition-colors"
                 >
                   Tại đây
                 </button>
-                <span className="text-blue-500 font-semibold ml-2 hover:underline cursor-pointer">baocaoTNLĐ.pdf</span>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept=".pdf"
+                  className="hidden"
+                />
+                {uploadedFileName && (
+                  <span className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text">
+                    {uploadedFileName}
+                  </span>
+                )}
               </div>
 
               {/* TABLE I: 13-COLUMN COMPLEX ACCIDENT STATISTICS */}
               <div className="flex flex-col gap-2 mt-2">
-                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-850 rounded-xl shadow-sm bg-white dark:bg-zinc-950">
+                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm bg-white dark:bg-zinc-950">
                   <table className="w-full border-collapse text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
                     <thead>
                       {/* Row 1 headers */}
@@ -1808,18 +2294,18 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                         </td>
                       </tr>
                       <tr className="border-b border-zinc-200 dark:border-zinc-800 font-semibold text-zinc-700 dark:text-zinc-300">
-                        <td className="p-3 text-left pl-8">Tai nạn lao động</td>
-                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10"></td>
-                        <td className="p-3 text-center">{sumBlocks("tongSoVu")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soVuCoNguoiChet")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soVuHaiNguoiTroLen")}</td>
-                        <td className="p-3 text-center">{sumBlocks("tongSoNguoiBiNan")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soNguoiBiNanKhongQL")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soLaoDongNuBiNan")}</td>
-                        <td className="p-3 text-center">{sumBlocks("laoDongNuBiNanKhongQL")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soNguoiChet")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soNguoiChetKhongQL")}</td>
-                        <td className="p-3 text-center">{sumBlocks("soNguoiThuongNang")}</td>
+                        <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">Tai nạn lao động</td>
+                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800"></td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("tongSoVu")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soVuCoNguoiChet")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soVuHaiNguoiTroLen")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("tongSoNguoiBiNan")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soNguoiBiNanKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soLaoDongNuBiNan")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("laoDongNuBiNanKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soNguoiChet")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soNguoiChetKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocks("soNguoiThuongNang")}</td>
                         <td className="p-3 text-center">{sumBlocks("soNguoiThuongNangKhongQL")}</td>
                       </tr>
 
@@ -1830,7 +2316,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                         </td>
                       </tr>
                       {/* Sub Category: a. Do người sử dụng lao động */}
-                      <tr className="border-b border-zinc-150 dark:border-zinc-800/80 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
                         <td colSpan={13} className="p-2 text-left pl-6">
                           a. Do người sử dụng lao động
                         </td>
@@ -1843,7 +2329,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       {renderCauseRow(CAUSE_CATEGORIES[5], "6")}
                       
                       {/* Sub Category: b. Do người lao động */}
-                      <tr className="border-b border-zinc-150 dark:border-zinc-800/80 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
                         <td colSpan={13} className="p-2 text-left pl-6">
                           b. Do người lao động
                         </td>
@@ -1861,19 +2347,19 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       {FACTOR_CATEGORIES.map((factor, index) => {
                         const code = getFactorCode(factor);
                         return (
-                          <tr key={code} className="border-b border-zinc-150 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            <td className="p-3 text-left pl-8">{factor}</td>
-                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold">{code}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "tongSoVu")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soVuCoNguoiChet")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soVuHaiNguoiTroLen")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "tongSoNguoiBiNan")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiBiNanKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soLaoDongNuBiNan")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "laoDongNuBiNanKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiChet")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiChetKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiThuongNang")}</td>
+                          <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{factor}</td>
+                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoVu")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuCoNguoiChet")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuHaiNguoiTroLen")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoNguoiBiNan")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiBiNanKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soLaoDongNuBiNan")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "laoDongNuBiNanKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChet")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChetKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiThuongNang")}</td>
                             <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiThuongNangKhongQL")}</td>
                           </tr>
                         );
@@ -1888,19 +2374,19 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       {JOB_CATEGORIES.map((job, index) => {
                         const code = getJobCode(job);
                         return (
-                          <tr key={code} className="border-b border-zinc-150 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            <td className="p-3 text-left pl-8">{job}</td>
-                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold">{code}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "tongSoVu")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soVuCoNguoiChet")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soVuHaiNguoiTroLen")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "tongSoNguoiBiNan")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiBiNanKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soLaoDongNuBiNan")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "laoDongNuBiNanKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiChet")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiChetKhongQL")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiThuongNang")}</td>
+                          <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{job}</td>
+                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoVu")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuCoNguoiChet")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuHaiNguoiTroLen")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoNguoiBiNan")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiBiNanKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soLaoDongNuBiNan")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "laoDongNuBiNanKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChet")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChetKhongQL")}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiThuongNang")}</td>
                             <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiThuongNangKhongQL")}</td>
                           </tr>
                         );
@@ -1913,18 +2399,18 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                         </td>
                       </tr>
                       <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <td className="p-3 text-left pl-8"></td>
-                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold">10</td>
-                        <td className="p-3 text-center">{Number(formData.tc_tongSoVu || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soVuCoNguoiChet || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soVuHaiNguoiTroLen || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_tongSoNguoiBiNan || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soNguoiBiNanKhongQL || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soLaoDongNuBiNan || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_laoDongNuBiNanKhongQL || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soNguoiChet || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soNguoiChetKhongQL || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soNguoiThuongNang || 0)}</td>
+                        <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800"></td>
+                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">10</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoVu || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuCoNguoiChet || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuHaiNguoiTroLen || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoNguoiBiNan || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiBiNanKhongQL || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soLaoDongNuBiNan || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_laoDongNuBiNanKhongQL || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChet || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChetKhongQL || 0)}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiThuongNang || 0)}</td>
                         <td className="p-3 text-center">{Number(formData.tc_soNguoiThuongNangKhongQL || 0)}</td>
                       </tr>
 
@@ -1934,19 +2420,19 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                           3. Tổng số
                         </td>
                       </tr>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 font-bold text-zinc-950 dark:text-zinc-50">
-                        <td className="p-3 text-left">Tổng số (3=1+2)</td>
-                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold">-</td>
-                        <td className="p-3 text-center">{sumCol("tongSoVu", "tc_tongSoVu")}</td>
-                        <td className="p-3 text-center">{sumCol("soVuCoNguoiChet", "tc_soVuCoNguoiChet")}</td>
-                        <td className="p-3 text-center">{sumCol("soVuHaiNguoiTroLen", "tc_soVuHaiNguoiTroLen")}</td>
-                        <td className="p-3 text-center">{sumCol("tongSoNguoiBiNan", "tc_tongSoNguoiBiNan")}</td>
-                        <td className="p-3 text-center">{sumCol("soNguoiBiNanKhongQL", "tc_soNguoiBiNanKhongQL")}</td>
-                        <td className="p-3 text-center">{sumCol("soLaoDongNuBiNan", "tc_soLaoDongNuBiNan")}</td>
-                        <td className="p-3 text-center">{sumCol("laoDongNuBiNanKhongQL", "tc_laoDongNuBiNanKhongQL")}</td>
-                        <td className="p-3 text-center">{sumCol("soNguoiChet", "tc_soNguoiChet")}</td>
-                        <td className="p-3 text-center">{sumCol("soNguoiChetKhongQL", "tc_soNguoiChetKhongQL")}</td>
-                        <td className="p-3 text-center">{sumCol("soNguoiThuongNang", "tc_soNguoiThuongNang")}</td>
+                      <tr className="border-b border-zinc-200 dark:border-zinc-800 font-bold text-zinc-950 dark:text-zinc-550">
+                        <td className="p-3 text-left border-r border-zinc-200 dark:border-zinc-800">Tổng số (3=1+2)</td>
+                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">-</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("tongSoVu", "tc_tongSoVu")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soVuCoNguoiChet", "tc_soVuCoNguoiChet")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soVuHaiNguoiTroLen", "tc_soVuHaiNguoiTroLen")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("tongSoNguoiBiNan", "tc_tongSoNguoiBiNan")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soNguoiBiNanKhongQL", "tc_soNguoiBiNanKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soLaoDongNuBiNan", "tc_soLaoDongNuBiNan")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("laoDongNuBiNanKhongQL", "tc_laoDongNuBiNanKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soNguoiChet", "tc_soNguoiChet")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soNguoiChetKhongQL", "tc_soNguoiChetKhongQL")}</td>
+                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumCol("soNguoiThuongNang", "tc_soNguoiThuongNang")}</td>
                         <td className="p-3 text-center">{sumCol("soNguoiThuongNangKhongQL", "tc_soNguoiThuongNangKhongQL")}</td>
                       </tr>
                     </tbody>
@@ -1961,7 +2447,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                     II. Thiệt hại do tai nạn lao động
                   </h4>
                 </div>
-                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-850 rounded-xl shadow-sm bg-white dark:bg-zinc-950">
+                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm bg-white dark:bg-zinc-950">
                   <table className="w-full border-collapse text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                     <thead>
                       <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/20 text-zinc-550 dark:text-zinc-400 font-bold select-none text-center">
@@ -2000,6 +2486,24 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               </div>
             </div>
           )}
+          
+          {/* Footer Back Button at bottom of the card */}
+          <div className="mt-8 pt-5 border-t border-zinc-150 dark:border-zinc-800 flex items-center justify-between select-none">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="flex items-center gap-1.5 px-4 py-2 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl font-bold text-xs text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer bg-transparent hover:text-zinc-900"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Quay lại</span>
+            </button>
+            
+            <span className="text-[10px] font-bold text-zinc-400">
+              {currentSection === "enterprise-info" ? "Bước 1 / 4" :
+               currentSection === "accident-stats" ? (activeTab === "totals" ? "Bước 2 / 4 (Tổng số)" : "Bước 2 / 4 (Chi tiết)") :
+               currentSection === "accident-benefits" ? "Bước 3 / 4" : "Bước 4 / 4 (Tổng quan)"}
+            </span>
+          </div>
         </div>
       )}
 
@@ -2012,7 +2516,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
             onClick={() => setShowCancelConfirm(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
-          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-[20px] w-full max-w-[460px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+          <div className="relative bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-[20px] w-full max-w-[460px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
             <div className="bg-[#2563eb] text-white py-4 text-center font-bold text-lg select-none tracking-wide flex items-center justify-center gap-2">
               <AlertTriangle className="w-5 h-5" />
               <span>Cảnh báo</span>
@@ -2038,6 +2542,45 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                 className="px-6 py-2 bg-[#2563eb] hover:bg-blue-700 text-white rounded-xl shadow-md transition-all cursor-pointer"
               >
                 Đồng ý
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* POPUP VALIDATION ERRORS */}
+      {/* ========================================== */}
+      {validationErrorsPopup && validationErrorsPopup.length > 0 && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div
+            onClick={() => setValidationErrorsPopup(null)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-[20px] w-full max-w-[520px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col z-[10000]">
+            <div className="bg-red-600 text-white py-4 text-center font-bold text-lg select-none tracking-wide flex items-center justify-center gap-2">
+              <AlertTriangle className="w-5 h-5 animate-bounce" />
+              <span>Cảnh báo dữ liệu không hợp lệ</span>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[300px] text-left">
+              <p className="text-zinc-800 dark:text-zinc-200 font-bold text-sm mb-3">
+                Vui lòng kiểm tra và sửa lại các thông tin chưa chính xác dưới đây:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-xs font-semibold text-red-650 dark:text-red-400">
+                {validationErrorsPopup.map((err, i) => (
+                  <li key={i} className="leading-relaxed pl-1">{err}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 pb-6 select-none font-bold text-sm border-t border-zinc-100 dark:border-zinc-900 pt-4">
+              <button
+                type="button"
+                onClick={() => setValidationErrorsPopup(null)}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Đã hiểu
               </button>
             </div>
           </div>
