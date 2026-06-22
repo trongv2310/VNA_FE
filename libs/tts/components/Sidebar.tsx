@@ -13,7 +13,7 @@ interface SidebarProps {
   fullName: string;
   avatarUrl: string;
   role: string;
-  onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management" | "company-info" | "tnld-reports") => void;
+  onSelectView: (view: "profile" | "change-password" | "user-management" | "enterprise-management" | "company-info" | "tnld-reports" | "tnld-theo-hdld") => void;
   onLogout: () => void;
   activeItem?: string;
   onCloseMobile?: () => void;
@@ -179,7 +179,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           } else if (child.id === "thong_tin_doanh_nghiep") {
                             onSelectView("company-info");
                           } else if (child.id === "tnld_theo_hdld") {
-                            onSelectView("tnld-reports");
+                            if (role && role.includes("ADMIN")) {
+                              onSelectView("tnld-reports");
+                            } else {
+                              onSelectView("tnld-theo-hdld");
+                            }
                           }
                         }}
                         className={`w-full flex items-center px-4 py-2 text-xs rounded-lg transition-all text-left font-medium cursor-pointer
