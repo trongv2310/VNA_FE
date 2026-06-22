@@ -23,6 +23,7 @@ import {
   updateBusiness,
   updateBusinessStatus,
   deleteBusiness,
+  getUsers,
   updateUserAdmin,
   type BusinessListItem,
   type BusinessListMeta,
@@ -92,6 +93,28 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
   const [wizardMode, setWizardMode] = useState<"create" | "edit" | "view" | null>(null);
   const [editingId, setEditingId] = useState<number | undefined>(undefined);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  const resolveBusinessAccountUserId = async (business: BusinessListItem) => {
+    if (business.accountUserId !== undefined && business.accountUserId !== null) {
+      return business.accountUserId;
+    }
+
+    const username = (business.accountUsername || business.taxCode || "").trim();
+    if (!username) {
+      return null;
+    }
+
+    const response = await getUsers({ username, limit: 20 });
+    if (!response.success || !response.data?.items?.length) {
+      return null;
+    }
+
+    const matchedUser = response.data.items.find(
+      (user) => user.username?.trim().toLowerCase() === username.toLowerCase(),
+    );
+
+    return matchedUser?.id ?? null;
+  };
 
   // Fetch BUSINESS_TYPES options from backend
   useEffect(() => {
@@ -524,11 +547,12 @@ export const EnterpriseManagement: React.FC<EnterpriseManagementProps> = ({ show
           username={passwordResetEnterprise.accountUsername || passwordResetEnterprise.taxCode}
           onSave={async (pw) => {
             try {
-              if (!passwordResetEnterprise.accountUserId) {
-                showToast("Không tìm thấy tài khoản liên kết với doanh nghiệp", "error");
+              const resolvedUserId = await resolveBusinessAccountUserId(passwordResetEnterprise);
+              if (!resolvedUserId) {
+                showToast("Không tìm thấy tài khoản liên kết với doanh nghiệp này", "error");
                 return;
               }
-              const response = await updateUserAdmin(passwordResetEnterprise.accountUserId, {
+              const response = await updateUserAdmin(resolvedUserId, {
                 password: pw,
               });
               if (response.success) {

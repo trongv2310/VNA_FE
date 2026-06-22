@@ -501,12 +501,14 @@ async function request<T>(path: string, init: RequestInit = {}) {
   }
 
   let response: Response;
+  const url = joinApiPath(API_BASE_URL, path);
   try {
-    response = await fetch(joinApiPath(API_BASE_URL, path), {
+    response = await fetch(url, {
       ...init,
       headers,
     });
-  } catch {
+  } catch (error) {
+    console.error("Fetch API error:", { url, error });
     throw new Error("Không thể kết nối đến máy chủ. Kiểm tra backend và cấu hình API.");
   }
 
@@ -732,4 +734,42 @@ export async function updateMyBusinessProfile(formData: FormData) {
     body: formData,
   });
 }
+
+export interface ListDepartmentReportsQuery {
+  page?: number | string;
+  limit?: number | string;
+  year?: string;
+  periodType?: string;
+  status?: string;
+  reportPeriodId?: string;
+  businessName?: string;
+  taxCode?: string;
+  provinceCity?: string;
+  wardCommune?: string;
+}
+
+export async function getDepartmentReports(query?: ListDepartmentReportsQuery) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/labor-accident-reports/admin${queryString ? `?${queryString}` : ""}`;
+  return request<any>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function receiveDepartmentReport(id: number | string) {
+  return request<any>(`/labor-accident-reports/admin/${id}/receive`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
+
 
