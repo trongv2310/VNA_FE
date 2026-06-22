@@ -13,6 +13,7 @@ export * from "./EditUser";
 export * from "./SearchSelect";
 export * from "./DocumentViewer";
 export * from "./DeleteConfirmModal";
+export * from "./TnldTheoHdld";
 
 
 
