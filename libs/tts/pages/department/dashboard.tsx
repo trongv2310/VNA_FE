@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, LogOut, X } from "lucide-react";
-import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement, CreateEnterprise } from "../../components";
+import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement, CreateEnterprise, TnldTheoHdld } from "../../components";
 import type { UserData } from "../../components/UserProfile";
 import {
   changePassword,
@@ -38,7 +38,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
   const [initialUserData, setInitialUserData] = useState<UserData>(EMPTY_USER_DATA);
   const [profileResetKey, setProfileResetKey] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management" | "company-info">("profile");
+  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management" | "company-info" | "tnld-theo-hdld">("profile");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -255,6 +255,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
           ? "quan_ly_doanh_nghiep"
           : activeView === "company-info"
           ? "thong_tin_doanh_nghiep"
+          : activeView === "tnld-theo-hdld"
+          ? "tnld_theo_hdld"
           : ""
       }
       onCloseMobile={() => setMobileMenuOpen(false)}
@@ -354,6 +356,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
               }}
               showToast={showToastMsg}
             />
+          ) : activeView === "tnld-theo-hdld" ? (
+            <TnldTheoHdld showToast={showToastMsg} />
           ) : (
             <UserProfile
               key={profileResetKey}
