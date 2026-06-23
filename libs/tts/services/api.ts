@@ -772,4 +772,145 @@ export async function receiveDepartmentReport(id: number | string) {
   });
 }
 
+export async function getMyLaborAccidentReports(query?: {
+  page?: number | string;
+  limit?: number | string;
+  year?: string;
+  periodType?: string;
+  status?: string;
+}) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/labor-accident-reports/my${queryString ? `?${queryString}` : ""}`;
+  return request<any>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function getMyLaborAccidentReportDetail(id: number | string) {
+  try {
+    return await request<any>(`/labor-accident-reports/my/${id}`, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Không tìm thấy báo cáo tai nạn lao động",
+      data: null,
+    };
+  }
+}
+
+export async function saveLaborAccidentReportDraft(body: FormData) {
+  return request<any>("/labor-accident-reports/my/draft", {
+    method: "POST",
+    headers: authHeaders(),
+    body,
+  });
+}
+
+export async function submitLaborAccidentReport(id: number | string, body: FormData) {
+  return request<any>(`/labor-accident-reports/my/${id}/submit`, {
+    method: "POST",
+    headers: authHeaders(),
+    body,
+  });
+}
+
+export async function getCatalogOptions(type?: string) {
+  const path = `/labor-accident-catalogs/options${type ? `?type=${type}` : ""}`;
+  return request<any>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function getDepartmentReportDetail(id: number | string) {
+  try {
+    return await request<any>(`/labor-accident-reports/admin/${id}`, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Không tìm thấy báo cáo tai nạn lao động",
+      data: null,
+    };
+  }
+}
+
+export async function getReportPeriods(query?: {
+  page?: number | string;
+  limit?: number | string;
+  year?: string;
+  reportName?: string;
+  periodType?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: string | boolean;
+}) {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
+  }
+  const queryString = params.toString();
+  const path = `/labor-accident-report-periods${queryString ? `?${queryString}` : ""}`;
+  return request<any>(path, {
+    method: "GET",
+    headers: authHeaders(),
+  });
+}
+
+export async function createReportPeriod(body: {
+  reportName: string;
+  year: number | string;
+  periodType: string;
+  startDate: string;
+  endDate: string;
+  isActive?: boolean;
+}) {
+  return request<any>("/labor-accident-report-periods", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateReportPeriod(id: number | string, body: {
+  reportName?: string;
+  year?: number | string;
+  periodType?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+}) {
+  return request<any>(`/labor-accident-report-periods/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateReportPeriodStatus(id: number | string, isActive: boolean) {
+  return request<any>(`/labor-accident-report-periods/${id}/status`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ isActive }),
+  });
+}
+
 
