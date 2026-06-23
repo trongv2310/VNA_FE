@@ -9,8 +9,9 @@ import {
   Eye,
   FileText,
 } from "lucide-react";
-import { getDepartmentReports, receiveDepartmentReport } from "../services/api";
+import { getDepartmentReports, receiveDepartmentReport, getReportPeriods, getStoredBackendUser } from "../services/api";
 import { DepartmentReportDetail } from "./DepartmentReportDetail";
+import { useAddress } from "../hooks/useAddress";
 
 interface DepartmentReportsProps {
   showToast: (message: string, type: "success" | "error") => void;
@@ -26,64 +27,57 @@ interface ReportItem {
   statusLabel: string;
 }
 
-const MOCK_REPORTS: ReportItem[] = [
-  {
-    id: 1,
-    businessName: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI PHẠM THIÊN ÂN",
-    taxCode: "0317118106",
-    periodType: "SIX_MONTHS",
-    periodLabel: "6 tháng",
-    status: "DRAFT",
-    statusLabel: "Đang báo cáo",
-  },
-  {
-    id: 2,
-    businessName: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI PHẠM THIÊN ÂN",
-    taxCode: "0317118106",
-    periodType: "FULL_YEAR",
-    periodLabel: "Cả năm",
-    status: "RECEIVED",
-    statusLabel: "Đã tiếp nhận",
-  },
-  {
-    id: 3,
-    businessName: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI PHẠM THIÊN",
-    taxCode: "0317118107",
-    periodType: "FULL_YEAR",
-    periodLabel: "Cả năm",
-    status: "RECEIVED",
-    statusLabel: "Đã tiếp nhận",
-  },
-  {
-    id: 4,
-    businessName: "CÔNG TY TNHH THƯƠNG MẠI DỊCH VỤ VẬN TẢI PHẠM THIÊN",
-    taxCode: "0317118106",
-    periodType: "FULL_YEAR",
-    periodLabel: "Cả năm",
-    status: "RECEIVED",
-    statusLabel: "Đã tiếp nhận",
-  },
-];
-
 export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast }) => {
   // Filters & State
-  const [year, setYear] = useState("2022");
-  const [provinceCity, setProvinceCity] = useState("Hồ Chí Minh");
+  const [year, setYear] = useState("2026");
+  const [availableYears, setAvailableYears] = useState<string[]>(["2022", "2023", "2024", "2025", "2026"]);
+
+  useEffect(() => {
+    const fetchPeriods = async () => {
+      try {
+        const res = await getReportPeriods({ limit: 100 });
+        if (res.success && res.data && res.data.items) {
+          const years = new Set<string>(["2022", "2023", "2024", "2025", "2026"]);
+          res.data.items.forEach((item: any) => {
+            if (item.year) years.add(String(item.year));
+          });
+          setAvailableYears(Array.from(years).sort((a, b) => Number(b) - Number(a)));
+        }
+      } catch (error) {
+        console.error("Failed to load report periods for year filter:", error);
+      }
+    };
+    fetchPeriods();
+  }, []);
+  // Get logged-in user to default the provinceCity
+  const [provinceCity, setProvinceCity] = useState(() => {
+    if (typeof window !== "undefined") {
+      const user = getStoredBackendUser();
+      return user?.provinceCity || "Thành phố Hồ Chí Minh";
+    }
+    return "Thành phố Hồ Chí Minh";
+  });
   const [wardCommune, setWardCommune] = useState("");
+
+  const {
+    provinces,
+    wards,
+    isLoadingWards,
+  } = useAddress(provinceCity);
   const [businessNameQuery, setBusinessNameQuery] = useState("");
   const [taxCodeQuery, setTaxCodeQuery] = useState("");
   const [periodFilter, setPeriodFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const [reports, setReports] = useState<ReportItem[]>(MOCK_REPORTS);
+  const [reports, setReports] = useState<ReportItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
-  const [totalItems, setTotalItems] = useState(MOCK_REPORTS.length);
+  const [totalItems, setTotalItems] = useState(0);
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
-  // Sync API reports if available, fallback to filtered mock reports
+  // Sync API reports if available
   useEffect(() => {
     let active = true;
     const fetchReports = async () => {
@@ -102,7 +96,7 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
           wardCommune: wardCommune === "Tất cả" ? undefined : wardCommune,
         });
 
-        if (active && response.success && response.data && response.data.items && response.data.items.length > 0) {
+        if (active && response.success && response.data && response.data.items) {
           const items = response.data.items.map((item: any) => ({
             id: item.id,
             businessName: item.business?.businessName || item.businessName || "-",
@@ -115,50 +109,22 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
           setReports(items);
           setTotalItems(response.data.meta?.totalItems || items.length);
         } else {
-          // Fallback to client-side filtering on mock data if API yields no data
           if (active) {
-            applyClientSideFilters();
+            setReports([]);
+            setTotalItems(0);
           }
         }
       } catch (error) {
-        console.error("Failed to load reports from API, falling back to mock data:", error);
+        console.error("Failed to load reports from API:", error);
         if (active) {
-          applyClientSideFilters();
+          setReports([]);
+          setTotalItems(0);
         }
       } finally {
         if (active) {
           setIsLoading(false);
         }
       }
-    };
-
-    const applyClientSideFilters = () => {
-      let filtered = [...MOCK_REPORTS];
-
-      if (businessNameQuery) {
-        const query = businessNameQuery.trim().toLowerCase();
-        filtered = filtered.filter((r) => r.businessName.toLowerCase().includes(query));
-      }
-
-      if (taxCodeQuery) {
-        const query = taxCodeQuery.trim();
-        filtered = filtered.filter((r) => r.taxCode.includes(query));
-      }
-
-      if (periodFilter) {
-        filtered = filtered.filter((r) => r.periodType === periodFilter);
-      }
-
-      if (statusFilter) {
-        filtered = filtered.filter((r) => r.status === statusFilter);
-      }
-
-      // Local pagination mock-up
-      const startIndex = (page - 1) * limit;
-      const paginated = filtered.slice(startIndex, startIndex + limit);
-
-      setReports(paginated);
-      setTotalItems(filtered.length);
     };
 
     const delayDebounceFn = setTimeout(() => {
@@ -229,11 +195,9 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
               }}
               className="w-full text-xs pl-3 pr-8 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none bg-white dark:bg-zinc-950 font-bold appearance-none cursor-pointer focus:border-blue-500 transition-colors"
             >
-              <option value="2022">2022</option>
-              <option value="2023">2023</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
           </div>
@@ -258,12 +222,20 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
               value={provinceCity}
               onChange={(e) => {
                 setProvinceCity(e.target.value);
+                setWardCommune("");
                 setPage(1);
               }}
-              className="w-full text-xs pl-3 pr-8 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none bg-zinc-50/50 dark:bg-zinc-900/10 cursor-not-allowed appearance-none"
-              disabled
+              className="w-full text-xs pl-3 pr-8 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none bg-white dark:bg-zinc-950 appearance-none cursor-pointer focus:border-blue-500 transition-colors font-medium"
             >
-              <option value="Hồ Chí Minh">Hồ Chí Minh</option>
+              <option value="">Tất cả</option>
+              {provinceCity && !provinces.some(p => p.name === provinceCity) && (
+                <option value={provinceCity}>{provinceCity}</option>
+              )}
+              {provinces.map((p) => (
+                <option key={p.code} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
           </div>
@@ -280,11 +252,14 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
                 setPage(1);
               }}
               className="w-full text-xs pl-3 pr-8 py-2 border border-zinc-200 dark:border-zinc-800 rounded-lg outline-none bg-white dark:bg-zinc-950 appearance-none cursor-pointer focus:border-blue-500 transition-colors font-medium"
+              disabled={!provinceCity || isLoadingWards || wards.length === 0}
             >
-              <option value="">Tất cả</option>
-              <option value="Phường Hiệp Bình Phước">Phường Hiệp Bình Phước</option>
-              <option value="Phường Bến Nghé">Phường Bến Nghé</option>
-              <option value="Phường 1">Phường 1</option>
+              <option value="">{isLoadingWards ? "Đang tải..." : "Tất cả"}</option>
+              {wards.map((w) => (
+                <option key={w.code} value={w.name}>
+                  {w.name}
+                </option>
+              ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
           </div>

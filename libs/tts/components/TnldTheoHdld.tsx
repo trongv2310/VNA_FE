@@ -12,8 +12,18 @@ import {
   ArrowRight,
   Save,
   Printer,
-  Send
+  Send,
+  Loader2
 } from "lucide-react";
+import {
+  getMyLaborAccidentReports,
+  getMyLaborAccidentReportDetail,
+  saveLaborAccidentReportDraft,
+  submitLaborAccidentReport,
+  getCatalogOptions,
+  getReportPeriods,
+  getMyBusinessProfile
+} from "../services/api";
 
 interface TnldTheoHdldProps {
   showToast: (message: string, type: "success" | "error") => void;
@@ -49,6 +59,7 @@ interface AccidentDetailBlock {
 
 interface ReportData {
   id: number;
+  reportPeriodId?: number;
   year: number;
   period: string; // "6 tháng" | "Cả năm"
   status: "Đang báo cáo" | "Đã tiếp nhận";
@@ -264,13 +275,13 @@ const JOB_CATEGORIES = [
 ];
 
 export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
-  const [reports, setReports] = useState<ReportData[]>(DEFAULT_REPORT_LIST);
+  const [reports, setReports] = useState<ReportData[]>([]);
   const [viewMode, setViewMode] = useState<"list" | "declaration">("list");
   const [selectedReport, setSelectedReport] = useState<ReportData | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
   
   // Year Filter in List
-  const [selectedYearFilter, setSelectedYearFilter] = useState<number>(2022);
+  const [selectedYearFilter, setSelectedYearFilter] = useState<number>(2026);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
 
   // Sections navigation state
@@ -297,6 +308,35 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   // File upload state for PDF report
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Catalog cache states
+  const [causeCatalog, setCauseCatalog] = useState<any[]>([]);
+  const [factorCatalog, setFactorCatalog] = useState<any[]>([]);
+  const [jobCatalog, setJobCatalog] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+  const [activePeriods, setActivePeriods] = useState<any[]>([]);
+
+  const availableYears = React.useMemo(() => {
+    const years = new Set<number>();
+    years.add(2022);
+    years.add(2023);
+    years.add(2024);
+    years.add(2025);
+    years.add(2026);
+    
+    activePeriods.forEach((p) => {
+      if (p.year) years.add(Number(p.year));
+    });
+
+    reports.forEach((r) => {
+      if (r.year) years.add(Number(r.year));
+    });
+
+    return Array.from(years).sort((a, b) => b - a);
+  }, [activePeriods, reports]);
 
   // Format Helper with dots
   const formatNumberWithDots = (val: string | number) => {
@@ -312,77 +352,373 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     return cleanStr ? Number(cleanStr) : 0;
   };
 
-  // Synchronize reports list from localStorage on mount
-  useEffect(() => {
-    const storedReports = localStorage.getItem("vna_reports_list");
-    if (storedReports) {
-      try {
-        const parsed = JSON.parse(storedReports) as ReportData[];
-        const migrated = parsed.map(r => {
-          if (r.id === 1 && r.tc_tongSoVu === "2") {
-            return {
-              ...r,
-              tc_tongSoVu: "0",
-              tc_soVuCoNguoiChet: "0",
-              tc_soVuHaiNguoiTroLen: "0",
-              tc_tongSoNguoiBiNan: "0",
-              tc_soLaoDongNuBiNan: "0",
-              tc_soNguoiChet: "0",
-              tc_soNguoiThuongNang: "0",
-              tc_soNguoiBiNanKhongQL: "0",
-              tc_laoDongNuBiNanKhongQL: "0",
-              tc_soNguoiChetKhongQL: "0",
-              tc_soNguoiThuongNangKhongQL: "0",
-              tc_chiPhiYTe: "0",
-              tc_chiPhiLuong: "0",
-              tc_chiPhiBoiThuong: "0",
-              tc_tongChiPhi: "0",
-              tc_soNgayNghi: "0",
-              tc_thietHaiTaiSan: "0"
-            };
-          }
-          return r;
-        });
-        setReports(migrated);
-        localStorage.setItem("vna_reports_list", JSON.stringify(migrated));
-      } catch (e) {
-        console.error("Lỗi parse danh sách báo cáo từ localStorage", e);
-      }
-    }
-  }, []);
-
-  // Update reports list helper
-  const updateReportsList = (nextReports: ReportData[]) => {
-    setReports(nextReports);
-    localStorage.setItem("vna_reports_list", JSON.stringify(nextReports));
+  // Mappings helper functions
+  const getCauseId = (name: string) => {
+    const found = causeCatalog.find(c => c.name.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found.id;
+    const partial = causeCatalog.find(c => c.name.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.name.toLowerCase()));
+    return partial ? partial.id : (causeCatalog[0]?.id || null);
   };
 
-  // Load temporary session state if editing/viewing
-  const handleEditClick = (report: ReportData, readOnly: boolean = false) => {
+  const getFactorId = (name: string) => {
+    const found = factorCatalog.find(c => c.name.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found.id;
+    const partial = factorCatalog.find(c => c.name.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.name.toLowerCase()));
+    return partial ? partial.id : (factorCatalog[0]?.id || null);
+  };
+
+  const getJobId = (name: string) => {
+    const found = jobCatalog.find(c => c.name.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found.id;
+    const partial = jobCatalog.find(c => c.name.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.name.toLowerCase()));
+    return partial ? partial.id : (jobCatalog[0]?.id || null);
+  };
+
+  const mapCauseToFrontend = (catalog: any) => {
+    if (!catalog) return CAUSE_CATEGORIES[0];
+    const name = catalog.name;
+    const found = CAUSE_CATEGORIES.find(c => c.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found;
+    const partial = CAUSE_CATEGORIES.find(c => c.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.toLowerCase()));
+    return partial ?? CAUSE_CATEGORIES[0];
+  };
+
+  const mapFactorToFrontend = (catalog: any) => {
+    if (!catalog) return FACTOR_CATEGORIES[0];
+    const name = catalog.name;
+    const found = FACTOR_CATEGORIES.find(c => c.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found;
+    const partial = FACTOR_CATEGORIES.find(c => c.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.toLowerCase()));
+    return partial ?? FACTOR_CATEGORIES[0];
+  };
+
+  const mapJobToFrontend = (catalog: any) => {
+    if (!catalog) return JOB_CATEGORIES[0];
+    const name = catalog.name;
+    const found = JOB_CATEGORIES.find(c => c.toLowerCase().trim() === name.toLowerCase().trim());
+    if (found) return found;
+    const partial = JOB_CATEGORIES.find(c => c.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(c.toLowerCase()));
+    return partial ?? JOB_CATEGORIES[0];
+  };
+
+  // Fetch catalogs and profile on mount
+  useEffect(() => {
+    const initData = async () => {
+      setIsLoading(true);
+      try {
+        const [causes, factors, jobs, profileRes] = await Promise.all([
+          getCatalogOptions("ACCIDENT_CAUSE"),
+          getCatalogOptions("INJURY_FACTOR"),
+          getCatalogOptions("OCCUPATION"),
+          getMyBusinessProfile()
+        ]);
+        if (causes.success) setCauseCatalog(causes.data || []);
+        if (factors.success) setFactorCatalog(factors.data || []);
+        if (jobs.success) setJobCatalog(jobs.data || []);
+        if (profileRes.success) setProfile(profileRes.data);
+      } catch (err) {
+        console.error("Lỗi khi tải dữ liệu cấu hình ban đầu:", err);
+        showToast("Không thể kết nối API cấu hình", "error");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initData();
+  }, []);
+
+  const loadReportsAndPeriods = async () => {
+    setIsLoading(true);
+    try {
+      const [reportsRes, periodsRes] = await Promise.all([
+        getMyLaborAccidentReports({ limit: 100 }),
+        getReportPeriods({ isActive: true, limit: 100 })
+      ]);
+
+      let backendReports: any[] = [];
+      if (reportsRes.success && reportsRes.data && reportsRes.data.items) {
+        backendReports = reportsRes.data.items;
+      }
+
+      let periods: any[] = [];
+      if (periodsRes.success && periodsRes.data && periodsRes.data.items) {
+        periods = periodsRes.data.items;
+      }
+      setActivePeriods(periods);
+
+      // Now map backend reports
+      const mappedReports: ReportData[] = backendReports.map((r: any) => {
+        const allowanceDetail = r.details?.find(
+          (d: any) => d.section === "ARTICLE_39_ALLOWANCE"
+        );
+
+        return {
+          id: r.id,
+          reportPeriodId: r.reportPeriod?.id,
+          year: r.reportPeriod?.year || new Date().getFullYear(),
+          period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
+          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
+          enterpriseName: r.businessName || profile?.businessName || "",
+          taxCode: r.taxCode || profile?.taxCode || "",
+          businessType: r.businessType || profile?.businessType || "",
+          industry: r.industryName || profile?.industryName || "",
+          laoDongCoSo: String(r.totalEmployees || 0),
+          laoDongNu: String(r.femaleEmployees || 0),
+          quyLuong: formatNumberWithDots(r.totalPayroll || 0),
+          tongSoVu: String(r.totalAccidents || 0),
+          soVuCoNguoiChet: String(r.fatalAccidents || 0),
+          soVuHaiNguoiTroLen: String(r.accidentsWithTwoOrMoreVictims || 0),
+          tongSoNguoiBiNan: String(r.totalVictims || 0),
+          soLaoDongNuBiNan: String(r.femaleVictims || 0),
+          soNguoiChet: String(r.deathVictims || 0),
+          soNguoiThuongNang: String(r.severeInjuryVictims || 0),
+          soNguoiBiNanKhongQL: String(r.victimsNotUnderManagement || 0),
+          laoDongNuBiNanKhongQL: String(r.femaleVictimsNotUnderManagement || 0),
+          soNguoiChetKhongQL: String(r.deathVictimsNotUnderManagement || 0),
+          soNguoiThuongNangKhongQL: String(r.severeInjuryVictimsNotUnderManagement || 0),
+          chiPhiYTe: formatNumberWithDots(r.medicalCost || 0),
+          chiPhiLuong: formatNumberWithDots(r.salaryPaymentCost || 0),
+          chiPhiBoiThuong: formatNumberWithDots(r.allowanceCost || 0),
+          tongChiPhi: formatNumberWithDots(r.totalCost || 0),
+          soNgayNghi: String(r.totalDaysOff || 0),
+          thietHaiTaiSan: formatNumberWithDots(r.propertyDamage || 0),
+          details: (r.details || [])
+            .filter((d: any) => d.section === "ACCIDENT")
+            .map((d: any) => ({
+              id: d.id,
+              causeCategory: mapCauseToFrontend(d.accidentCauseCatalog),
+              factorCategory: mapFactorToFrontend(d.injuryFactorCatalog),
+              jobCategory: mapJobToFrontend(d.occupationCatalog),
+              tongSoVu: String(d.totalAccidents || 0),
+              soVuCoNguoiChet: String(d.fatalAccidents || 0),
+              soVuHaiNguoiTroLen: String(d.accidentsWithTwoOrMoreVictims || 0),
+              tongSoNguoiBiNan: String(d.totalVictims || 0),
+              soLaoDongNuBiNan: String(d.femaleVictims || 0),
+              soNguoiChet: String(d.deathVictims || 0),
+              soNguoiThuongNang: String(d.severeInjuryVictims || 0),
+              soNguoiBiNanKhongQL: String(d.victimsNotUnderManagement || 0),
+              laoDongNuBiNanKhongQL: String(d.femaleVictimsNotUnderManagement || 0),
+              soNguoiChetKhongQL: String(d.deathVictimsNotUnderManagement || 0),
+              soNguoiThuongNangKhongQL: String(d.severeInjuryVictimsNotUnderManagement || 0),
+              chiPhiYTe: formatNumberWithDots(d.medicalCost || 0),
+              chiPhiLuong: formatNumberWithDots(d.salaryPaymentCost || 0),
+              chiPhiBoiThuong: formatNumberWithDots(d.allowanceCost || 0),
+              tongChiPhi: formatNumberWithDots(d.totalCost || 0),
+              soNgayNghi: String(d.daysOff || 0),
+              thietHaiTaiSan: formatNumberWithDots(d.propertyDamage || 0)
+            })),
+          tc_tongSoVu: String(allowanceDetail?.totalAccidents || 0),
+          tc_soVuCoNguoiChet: String(allowanceDetail?.fatalAccidents || 0),
+          tc_soVuHaiNguoiTroLen: String(allowanceDetail?.accidentsWithTwoOrMoreVictims || 0),
+          tc_tongSoNguoiBiNan: String(allowanceDetail?.totalVictims || 0),
+          tc_soLaoDongNuBiNan: String(allowanceDetail?.femaleVictims || 0),
+          tc_soNguoiChet: String(allowanceDetail?.deathVictims || 0),
+          tc_soNguoiThuongNang: String(allowanceDetail?.severeInjuryVictims || 0),
+          tc_soNguoiBiNanKhongQL: String(allowanceDetail?.victimsNotUnderManagement || 0),
+          tc_laoDongNuBiNanKhongQL: String(allowanceDetail?.femaleVictimsNotUnderManagement || 0),
+          tc_soNguoiChetKhongQL: String(allowanceDetail?.deathVictimsNotUnderManagement || 0),
+          tc_soNguoiThuongNangKhongQL: String(allowanceDetail?.severeInjuryVictimsNotUnderManagement || 0),
+          tc_chiPhiYTe: formatNumberWithDots(allowanceDetail?.medicalCost || 0),
+          tc_chiPhiLuong: formatNumberWithDots(allowanceDetail?.salaryPaymentCost || 0),
+          tc_chiPhiBoiThuong: formatNumberWithDots(allowanceDetail?.allowanceCost || 0),
+          tc_tongChiPhi: formatNumberWithDots(allowanceDetail?.totalCost || 0),
+          tc_soNgayNghi: String(allowanceDetail?.daysOff || 0),
+          tc_thietHaiTaiSan: formatNumberWithDots(allowanceDetail?.propertyDamage || 0)
+        };
+      });
+
+      // Merge active periods that don't have reports yet
+      const finalReports = [...mappedReports];
+      periods.forEach((p: any) => {
+        const exists = mappedReports.some((r: any) => r.reportPeriodId === p.id);
+        if (!exists) {
+          finalReports.push({
+            id: -p.id,
+            reportPeriodId: p.id,
+            year: p.year,
+            period: p.periodTypeLabel || (p.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
+            status: "Đang báo cáo",
+            enterpriseName: profile?.businessName || "",
+            taxCode: profile?.taxCode || "",
+            businessType: profile?.businessType || "",
+            industry: profile?.industryName || "",
+            laoDongCoSo: "",
+            laoDongNu: "",
+            quyLuong: "",
+            tongSoVu: "0",
+            soVuCoNguoiChet: "0",
+            soVuHaiNguoiTroLen: "0",
+            tongSoNguoiBiNan: "0",
+            soLaoDongNuBiNan: "0",
+            soNguoiChet: "0",
+            soNguoiThuongNang: "0",
+            soNguoiBiNanKhongQL: "0",
+            laoDongNuBiNanKhongQL: "0",
+            soNguoiChetKhongQL: "0",
+            soNguoiThuongNangKhongQL: "0",
+            chiPhiYTe: "0",
+            chiPhiLuong: "0",
+            chiPhiBoiThuong: "0",
+            tongChiPhi: "0",
+            soNgayNghi: "0",
+            thietHaiTaiSan: "0",
+            details: [],
+            tc_tongSoVu: "0",
+            tc_soVuCoNguoiChet: "0",
+            tc_soVuHaiNguoiTroLen: "0",
+            tc_tongSoNguoiBiNan: "0",
+            tc_soLaoDongNuBiNan: "0",
+            tc_soNguoiChet: "0",
+            tc_soNguoiThuongNang: "0",
+            tc_soNguoiBiNanKhongQL: "0",
+            tc_laoDongNuBiNanKhongQL: "0",
+            tc_soNguoiChetKhongQL: "0",
+            tc_soNguoiThuongNangKhongQL: "0",
+            tc_chiPhiYTe: "0",
+            tc_chiPhiLuong: "0",
+            tc_chiPhiBoiThuong: "0",
+            tc_tongChiPhi: "0",
+            tc_soNgayNghi: "0",
+            tc_thietHaiTaiSan: "0"
+          });
+        }
+      });
+
+      setReports(finalReports);
+    } catch (err) {
+      console.error("Lỗi khi tải danh sách báo cáo:", err);
+      showToast("Không thể tải danh sách báo cáo từ máy chủ", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (profile) {
+      loadReportsAndPeriods();
+    }
+  }, [profile]);
+
+  // Load details if editing/viewing from API
+  const handleEditClick = async (report: ReportData, readOnly: boolean = false) => {
     setSelectedReport(report);
     setIsReadOnly(readOnly);
     setCurrentSection(readOnly ? "general-view" : "enterprise-info");
     setActiveTab("totals");
     setErrors({});
     setBlockErrors({});
+    setUploadedFileName("");
+    setUploadedFile(null);
+    setUploadedFileUrl("");
     
-    // Check session cache first
-    const cached = sessionStorage.getItem(`vna_report_form_${report.id}`);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setFormData(parsed);
-        if (parsed.details && parsed.details.length > 0) {
+    if (report.id < 0) {
+      setFormData({ ...report });
+      setViewMode("declaration");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await getMyLaborAccidentReportDetail(report.id);
+      if (res.success && res.data) {
+        const r = res.data;
+        const allowanceDetail = r.details?.find(
+          (d: any) => d.section === "ARTICLE_39_ALLOWANCE"
+        );
+
+        if (r.attachments && r.attachments.length > 0) {
+          setUploadedFileName(r.attachments[0].displayName || r.attachments[0].originalName || "");
+          setUploadedFileUrl(r.attachments[0].fileUrl || "");
+        } else {
+          setUploadedFileUrl("");
+        }
+
+        const fullReport: ReportData = {
+          id: r.id,
+          reportPeriodId: r.reportPeriod?.id,
+          year: r.reportPeriod?.year || new Date().getFullYear(),
+          period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
+          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
+          enterpriseName: r.businessName || profile?.businessName || "",
+          taxCode: r.taxCode || profile?.taxCode || "",
+          businessType: r.businessType || profile?.businessType || "",
+          industry: r.industryName || profile?.industryName || "",
+          laoDongCoSo: String(r.totalEmployees || 0),
+          laoDongNu: String(r.femaleEmployees || 0),
+          quyLuong: formatNumberWithDots(r.totalPayroll || 0),
+          tongSoVu: String(r.totalAccidents || 0),
+          soVuCoNguoiChet: String(r.fatalAccidents || 0),
+          soVuHaiNguoiTroLen: String(r.accidentsWithTwoOrMoreVictims || 0),
+          tongSoNguoiBiNan: String(r.totalVictims || 0),
+          soLaoDongNuBiNan: String(r.femaleVictims || 0),
+          soNguoiChet: String(r.deathVictims || 0),
+          soNguoiThuongNang: String(r.severeInjuryVictims || 0),
+          soNguoiBiNanKhongQL: String(r.victimsNotUnderManagement || 0),
+          laoDongNuBiNanKhongQL: String(r.femaleVictimsNotUnderManagement || 0),
+          soNguoiChetKhongQL: String(r.deathVictimsNotUnderManagement || 0),
+          soNguoiThuongNangKhongQL: String(r.severeInjuryVictimsNotUnderManagement || 0),
+          chiPhiYTe: formatNumberWithDots(r.medicalCost || 0),
+          chiPhiLuong: formatNumberWithDots(r.salaryPaymentCost || 0),
+          chiPhiBoiThuong: formatNumberWithDots(r.allowanceCost || 0),
+          tongChiPhi: formatNumberWithDots(r.totalCost || 0),
+          soNgayNghi: String(r.totalDaysOff || 0),
+          thietHaiTaiSan: formatNumberWithDots(r.propertyDamage || 0),
+          details: (r.details || [])
+            .filter((d: any) => d.section === "ACCIDENT")
+            .map((d: any) => ({
+              id: d.id,
+              causeCategory: mapCauseToFrontend(d.accidentCauseCatalog),
+              factorCategory: mapFactorToFrontend(d.injuryFactorCatalog),
+              jobCategory: mapJobToFrontend(d.occupationCatalog),
+              tongSoVu: String(d.totalAccidents || 0),
+              soVuCoNguoiChet: String(d.fatalAccidents || 0),
+              soVuHaiNguoiTroLen: String(d.accidentsWithTwoOrMoreVictims || 0),
+              tongSoNguoiBiNan: String(d.totalVictims || 0),
+              soLaoDongNuBiNan: String(d.femaleVictims || 0),
+              soNguoiChet: String(d.deathVictims || 0),
+              soNguoiThuongNang: String(d.severeInjuryVictims || 0),
+              soNguoiBiNanKhongQL: String(d.victimsNotUnderManagement || 0),
+              laoDongNuBiNanKhongQL: String(d.femaleVictimsNotUnderManagement || 0),
+              soNguoiChetKhongQL: String(d.deathVictimsNotUnderManagement || 0),
+              soNguoiThuongNangKhongQL: String(d.severeInjuryVictimsNotUnderManagement || 0),
+              chiPhiYTe: formatNumberWithDots(d.medicalCost || 0),
+              chiPhiLuong: formatNumberWithDots(d.salaryPaymentCost || 0),
+              chiPhiBoiThuong: formatNumberWithDots(d.allowanceCost || 0),
+              tongChiPhi: formatNumberWithDots(d.totalCost || 0),
+              soNgayNghi: String(d.daysOff || 0),
+              thietHaiTaiSan: formatNumberWithDots(d.propertyDamage || 0)
+            })),
+          tc_tongSoVu: String(allowanceDetail?.totalAccidents || 0),
+          tc_soVuCoNguoiChet: String(allowanceDetail?.fatalAccidents || 0),
+          tc_soVuHaiNguoiTroLen: String(allowanceDetail?.accidentsWithTwoOrMoreVictims || 0),
+          tc_tongSoNguoiBiNan: String(allowanceDetail?.totalVictims || 0),
+          tc_soLaoDongNuBiNan: String(allowanceDetail?.femaleVictims || 0),
+          tc_soNguoiChet: String(allowanceDetail?.deathVictims || 0),
+          tc_soNguoiThuongNang: String(allowanceDetail?.severeInjuryVictims || 0),
+          tc_soNguoiBiNanKhongQL: String(allowanceDetail?.victimsNotUnderManagement || 0),
+          tc_laoDongNuBiNanKhongQL: String(allowanceDetail?.femaleVictimsNotUnderManagement || 0),
+          tc_soNguoiChetKhongQL: String(allowanceDetail?.deathVictimsNotUnderManagement || 0),
+          tc_soNguoiThuongNangKhongQL: String(allowanceDetail?.severeInjuryVictimsNotUnderManagement || 0),
+          tc_chiPhiYTe: formatNumberWithDots(allowanceDetail?.medicalCost || 0),
+          tc_chiPhiLuong: formatNumberWithDots(allowanceDetail?.salaryPaymentCost || 0),
+          tc_chiPhiBoiThuong: formatNumberWithDots(allowanceDetail?.allowanceCost || 0),
+          tc_tongChiPhi: formatNumberWithDots(allowanceDetail?.totalCost || 0),
+          tc_soNgayNghi: String(allowanceDetail?.daysOff || 0),
+          tc_thietHaiTaiSan: formatNumberWithDots(allowanceDetail?.propertyDamage || 0)
+        };
+
+        setFormData(fullReport);
+        if (fullReport.details && fullReport.details.length > 0) {
           setExpandedBlocks({ 1: true });
         }
-      } catch (e) {
-        setFormData({ ...report });
+        setViewMode("declaration");
+      } else {
+        showToast("Không thể tải chi tiết báo cáo", "error");
       }
-    } else {
-      setFormData({ ...report });
-      if (report.details && report.details.length > 0) {
-        setExpandedBlocks({ 1: true });
-      }
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi khi tải chi tiết báo cáo", "error");
+    } finally {
+      setIsLoading(false);
     }
     
     setViewMode("declaration");
@@ -402,7 +738,13 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         showToast("Vui lòng chỉ tải lên tệp tin PDF", "error");
         return;
       }
+      setUploadedFile(file);
       setUploadedFileName(file.name);
+      try {
+        setUploadedFileUrl(URL.createObjectURL(file));
+      } catch {
+        setUploadedFileUrl("");
+      }
       showToast(`Tải lên tệp ${file.name} thành công!`, "success");
     }
   };
@@ -411,7 +753,13 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!formData || isReadOnly) return;
     const { name, value } = e.target;
-    setFormData(prev => prev ? ({ ...prev, [name]: value }) : null);
+    
+    let nextValue = value;
+    if (name === "quyLuong") {
+      nextValue = formatNumberWithDots(value);
+    }
+    
+    setFormData(prev => prev ? ({ ...prev, [name]: nextValue }) : null);
 
     if (errors[name]) {
       setErrors(prev => {
@@ -1128,8 +1476,103 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     setCurrentSection(sec);
   };
 
-  // Submit and update the state
-  const handleSave = () => {
+  // Helper to construct FormData payload for saving/submitting report
+  const buildFormData = () => {
+    if (!formData) return null;
+    const data = new FormData();
+    data.append("reportPeriodId", String(formData.reportPeriodId));
+    data.append("totalEmployees", String(parseDotsToNumber(formData.laoDongCoSo)));
+    data.append("femaleEmployees", String(parseDotsToNumber(formData.laoDongNu)));
+    data.append("totalPayroll", String(parseDotsToNumber(formData.quyLuong)));
+    
+    data.append("totalAccidents", String(parseDotsToNumber(formData.tongSoVu)));
+    data.append("fatalAccidents", String(parseDotsToNumber(formData.soVuCoNguoiChet)));
+    data.append("accidentsWithTwoOrMoreVictims", String(parseDotsToNumber(formData.soVuHaiNguoiTroLen)));
+    data.append("totalVictims", String(parseDotsToNumber(formData.tongSoNguoiBiNan)));
+    data.append("femaleVictims", String(parseDotsToNumber(formData.soLaoDongNuBiNan)));
+    data.append("deathVictims", String(parseDotsToNumber(formData.soNguoiChet)));
+    data.append("severeInjuryVictims", String(parseDotsToNumber(formData.soNguoiThuongNang)));
+    data.append("victimsNotUnderManagement", String(parseDotsToNumber(formData.soNguoiBiNanKhongQL)));
+    data.append("femaleVictimsNotUnderManagement", String(parseDotsToNumber(formData.laoDongNuBiNanKhongQL)));
+    data.append("deathVictimsNotUnderManagement", String(parseDotsToNumber(formData.soNguoiChetKhongQL)));
+    data.append("severeInjuryVictimsNotUnderManagement", String(parseDotsToNumber(formData.soNguoiThuongNangKhongQL)));
+    
+    data.append("medicalCost", String(parseDotsToNumber(formData.chiPhiYTe)));
+    data.append("salaryPaymentCost", String(parseDotsToNumber(formData.chiPhiLuong)));
+    data.append("allowanceCost", String(parseDotsToNumber(formData.chiPhiBoiThuong)));
+    data.append("totalCost", String(parseDotsToNumber(formData.tongChiPhi)));
+    data.append("totalDaysOff", String(parseDotsToNumber(formData.soNgayNghi)));
+    data.append("propertyDamage", String(parseDotsToNumber(formData.thietHaiTaiSan)));
+
+    const detailsPayload: any[] = [];
+    
+    // Dynamic blocks (Tab 2)
+    if (formData.details && formData.details.length > 0) {
+      formData.details.forEach((block, idx) => {
+        detailsPayload.push({
+          section: "ACCIDENT",
+          orderNo: idx + 1,
+          accidentCauseCatalogId: getCauseId(block.causeCategory),
+          injuryFactorCatalogId: getFactorId(block.factorCategory),
+          occupationCatalogId: getJobId(block.jobCategory),
+          totalAccidents: parseDotsToNumber(block.tongSoVu),
+          fatalAccidents: parseDotsToNumber(block.soVuCoNguoiChet),
+          accidentsWithTwoOrMoreVictims: parseDotsToNumber(block.soVuHaiNguoiTroLen),
+          totalVictims: parseDotsToNumber(block.tongSoNguoiBiNan),
+          femaleVictims: parseDotsToNumber(block.soLaoDongNuBiNan),
+          deathVictims: parseDotsToNumber(block.soNguoiChet),
+          severeInjuryVictims: parseDotsToNumber(block.soNguoiThuongNang),
+          victimsNotUnderManagement: parseDotsToNumber(block.soNguoiBiNanKhongQL),
+          femaleVictimsNotUnderManagement: parseDotsToNumber(block.laoDongNuBiNanKhongQL),
+          deathVictimsNotUnderManagement: parseDotsToNumber(block.soNguoiChetKhongQL),
+          severeInjuryVictimsNotUnderManagement: parseDotsToNumber(block.soNguoiThuongNangKhongQL),
+          medicalCost: parseDotsToNumber(block.chiPhiYTe),
+          salaryPaymentCost: parseDotsToNumber(block.chiPhiLuong),
+          allowanceCost: parseDotsToNumber(block.chiPhiBoiThuong),
+          totalCost: parseDotsToNumber(block.tongChiPhi),
+          daysOff: parseDotsToNumber(block.soNgayNghi),
+          propertyDamage: parseDotsToNumber(block.thietHaiTaiSan)
+        });
+      });
+    }
+
+    // Section 3 totals (allowance)
+    detailsPayload.push({
+      section: "ARTICLE_39_ALLOWANCE",
+      orderNo: 1,
+      totalAccidents: parseDotsToNumber(formData.tc_tongSoVu),
+      fatalAccidents: parseDotsToNumber(formData.tc_soVuCoNguoiChet),
+      accidentsWithTwoOrMoreVictims: parseDotsToNumber(formData.tc_soVuHaiNguoiTroLen),
+      totalVictims: parseDotsToNumber(formData.tc_tongSoNguoiBiNan),
+      femaleVictims: parseDotsToNumber(formData.tc_soLaoDongNuBiNan),
+      deathVictims: parseDotsToNumber(formData.tc_soNguoiChet),
+      severeInjuryVictims: parseDotsToNumber(formData.tc_soNguoiThuongNang),
+      victimsNotUnderManagement: parseDotsToNumber(formData.tc_soNguoiBiNanKhongQL),
+      femaleVictimsNotUnderManagement: parseDotsToNumber(formData.tc_laoDongNuBiNanKhongQL),
+      deathVictimsNotUnderManagement: parseDotsToNumber(formData.tc_soNguoiChetKhongQL),
+      severeInjuryVictimsNotUnderManagement: parseDotsToNumber(formData.tc_soNguoiThuongNangKhongQL),
+      medicalCost: parseDotsToNumber(formData.tc_chiPhiYTe),
+      salaryPaymentCost: parseDotsToNumber(formData.tc_chiPhiLuong),
+      allowanceCost: parseDotsToNumber(formData.tc_chiPhiBoiThuong),
+      totalCost: parseDotsToNumber(formData.tc_tongChiPhi),
+      daysOff: parseDotsToNumber(formData.tc_soNgayNghi),
+      propertyDamage: parseDotsToNumber(formData.tc_thietHaiTaiSan)
+    });
+
+    data.append("details", JSON.stringify(detailsPayload));
+
+    if (uploadedFile) {
+      data.append("attachments", uploadedFile);
+    }
+    if (uploadedFileName) {
+      data.append("attachmentNames", JSON.stringify([uploadedFileName]));
+    }
+
+    return data;
+  };
+
+  // Submit and update the state in backend
+  const handleSave = async () => {
     if (!formData || isReadOnly) return;
 
     if (!validateSection("enterprise-info")) {
@@ -1145,17 +1588,26 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       return;
     }
 
-    // Save final report data to reports list and store in local database (localStorage)
-    const updated = reports.map(r => 
-      r.id === formData.id ? { ...formData, status: "Đã tiếp nhận" as const } : r
-    );
-    updateReportsList(updated);
-    
-    // Clear session cache
-    sessionStorage.removeItem(`vna_report_form_${formData.id}`);
-
-    showToast("Lưu báo cáo tai nạn lao động thành công!", "success");
-    setViewMode("list");
+    setIsLoading(true);
+    try {
+      const data = buildFormData();
+      if (!data) return;
+      const res = await saveLaborAccidentReportDraft(data);
+      if (res.success) {
+        // Clear session cache
+        sessionStorage.removeItem(`vna_report_form_${formData.id}`);
+        showToast("Lưu nháp báo cáo tai nạn lao động thành công!", "success");
+        setViewMode("list");
+        await loadReportsAndPeriods();
+      } else {
+        showToast(res.message || "Lưu nháp thất bại", "error");
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Lỗi khi lưu nháp báo cáo", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancelConfirm = () => {
@@ -1172,15 +1624,49 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     window.print();
   };
 
-  const handleSubmitReport = () => {
+  const handleSubmitReport = async () => {
     if (!formData || isReadOnly) return;
-    const updated = reports.map(r => 
-      r.id === formData.id ? { ...formData, status: "Đã tiếp nhận" as const } : r
-    );
-    updateReportsList(updated);
-    sessionStorage.removeItem(`vna_report_form_${formData.id}`);
-    showToast("Báo cáo tình hình tai nạn lao động đã được gửi thành công!", "success");
-    setViewMode("list");
+
+    setIsLoading(true);
+    try {
+      const data = buildFormData();
+      if (!data) return;
+      
+      let reportId = formData.id;
+      if (reportId < 0) {
+        const draftRes = await saveLaborAccidentReportDraft(data);
+        if (draftRes.success && draftRes.data) {
+          reportId = draftRes.data.id;
+        } else {
+          showToast("Không thể khởi tạo báo cáo trước khi gửi", "error");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      const submitData = new FormData();
+      if (uploadedFile) {
+        submitData.append("attachments", uploadedFile);
+      }
+      if (uploadedFileName) {
+        submitData.append("attachmentNames", JSON.stringify([uploadedFileName]));
+      }
+
+      const res = await submitLaborAccidentReport(reportId, submitData);
+      if (res.success) {
+        sessionStorage.removeItem(`vna_report_form_${formData.id}`);
+        showToast("Báo cáo tình hình tai nạn lao động đã được gửi thành công!", "success");
+        setViewMode("list");
+        await loadReportsAndPeriods();
+      } else {
+        showToast(res.message || "Gửi báo cáo thất bại", "error");
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Lỗi khi gửi báo cáo", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Dynamic Aggregation sums for General View Table
@@ -1306,15 +1792,15 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               <ChevronDown className="w-4 h-4 text-zinc-400" />
             </button>
             {showYearDropdown && (
-              <div className="absolute right-0 mt-1.5 w-28 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
-                {[2022, 2023, 2024, 2025].map(year => (
+              <div className="absolute right-0 mt-1.5 w-28 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-855 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                {availableYears.map(year => (
                   <button
                     key={year}
                     onClick={() => {
                       setSelectedYearFilter(year);
                       setShowYearDropdown(false);
                     }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-all hover:bg-zinc-50 dark:hover:bg-zinc-900 font-semibold ${
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-all hover:bg-zinc-55 dark:hover:bg-zinc-900 font-semibold ${
                       selectedYearFilter === year
                         ? "text-[#0b2868] bg-blue-50/40 dark:bg-blue-950/20 dark:text-blue-400"
                         : "text-zinc-650 dark:text-zinc-400"
@@ -1424,6 +1910,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
             </div>
           </div>
         </div>
+        {isLoading && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                Đang tải dữ liệu, vui lòng đợi...
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2208,26 +2704,63 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
 
               {/* Red file attachment note */}
               <div className="no-print text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 flex-wrap">
-                <span className="text-red-500 font-extrabold text-sm">**</span>
-                <span className="text-red-500">Vui lòng đính kèm báo cáo TNLĐ có dấu mộc công ty:</span>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="text-blue-600 hover:text-blue-700 underline font-bold cursor-pointer transition-colors"
-                >
-                  Tại đây
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".pdf"
-                  className="hidden"
-                />
-                {uploadedFileName && (
-                  <span className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text">
-                    {uploadedFileName}
-                  </span>
+                {isReadOnly ? (
+                  <>
+                    <span className="text-zinc-500 dark:text-zinc-400">Báo cáo TNLĐ có dấu mộc công ty:</span>
+                    {uploadedFileName ? (
+                      uploadedFileUrl ? (
+                        <a
+                          href={uploadedFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 font-semibold ml-1.5 hover:underline cursor-pointer select-text"
+                        >
+                          {uploadedFileName}
+                        </a>
+                      ) : (
+                        <span className="text-blue-500 font-semibold ml-1.5 hover:underline cursor-pointer select-text">
+                          {uploadedFileName}
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-500 font-medium italic ml-1.5">Không có tệp đính kèm</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-red-500 font-extrabold text-sm">**</span>
+                    <span className="text-red-500">Vui lòng đính kèm báo cáo TNLĐ có dấu mộc công ty:</span>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-blue-600 hover:text-blue-700 underline font-bold cursor-pointer transition-colors"
+                    >
+                      Tại đây
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept=".pdf"
+                      className="hidden"
+                    />
+                    {uploadedFileName && (
+                      uploadedFileUrl ? (
+                        <a
+                          href={uploadedFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text"
+                        >
+                          {uploadedFileName}
+                        </a>
+                      ) : (
+                        <span className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text">
+                          {uploadedFileName}
+                        </span>
+                      )
+                    )}
+                  </>
                 )}
               </div>
 
@@ -2583,6 +3116,17 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                 Đã hiểu
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Đang tải dữ liệu, vui lòng đợi...
+            </p>
           </div>
         </div>
       )}

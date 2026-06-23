@@ -16,4 +16,5 @@ export * from "./DeleteConfirmModal";
 export * from "./DepartmentReports";
 export * from "./DepartmentReportDetail";
 export * from "./TnldTheoHdld";
+export * from "./ReportPeriodManagement";
 

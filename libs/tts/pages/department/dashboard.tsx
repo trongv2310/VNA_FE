@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, LogOut, X } from "lucide-react";
-import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement, CreateEnterprise, DepartmentReports, TnldTheoHdld } from "../../components";
+import { ChangePassword, DashboardLayout, Sidebar, UserProfile, UserManagement, EnterpriseManagement, CreateEnterprise, DepartmentReports, TnldTheoHdld, ReportPeriodManagement } from "../../components";
 import type { UserData } from "../../components/UserProfile";
 import {
   changePassword,
@@ -38,7 +38,7 @@ export const DepartmentDashboardScreen: React.FC = () => {
   const [initialUserData, setInitialUserData] = useState<UserData>(EMPTY_USER_DATA);
   const [profileResetKey, setProfileResetKey] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management" | "company-info" | "tnld-reports" | "tnld-theo-hdld">("profile");
+  const [activeView, setActiveView] = useState<"profile" | "change-password" | "user-management" | "enterprise-management" | "company-info" | "tnld-reports" | "tnld-theo-hdld" | "report-period">("profile");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -257,6 +257,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
           ? "thong_tin_doanh_nghiep"
           : activeView === "tnld-reports" || activeView === "tnld-theo-hdld"
           ? "tnld_theo_hdld"
+          : activeView === "report-period"
+          ? "ky_bao_cao"
           : ""
       }
       onCloseMobile={() => setMobileMenuOpen(false)}
@@ -356,6 +358,8 @@ export const DepartmentDashboardScreen: React.FC = () => {
               }}
               showToast={showToastMsg}
             />
+          ) : activeView === "report-period" ? (
+            <ReportPeriodManagement showToast={showToastMsg} />
           ) : activeView === "tnld-reports" ? (
             <DepartmentReports showToast={showToastMsg} />
           ) : activeView === "tnld-theo-hdld" ? (
