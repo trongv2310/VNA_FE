@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const backendApiUrl =
-  process.env.BACKEND_API_URL || "http://127.0.0.1:3000/api/v1";
+  process.env.BACKEND_API_URL || "http://localhost:3000/api/v1";
 
 const nextConfig: NextConfig = {
   async rewrites() {

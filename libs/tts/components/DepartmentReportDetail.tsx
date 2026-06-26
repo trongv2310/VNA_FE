@@ -226,7 +226,7 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
     const row2 = buildDataArray(allowanceDetail);
     const row3 = row1.map((val, idx) => val + row2[idx]);
 
-    return [
+    const fullList = [
       {
         title: "1. Tai nạn lao động",
         isBoldHeader: true,
@@ -335,12 +335,57 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
         data: row3,
       },
     ];
+
+    const filteredList: TableRowData[] = [];
+
+    const isRowNonZero = (row: TableRowData) => {
+      return row.data && row.data.some(val => Number(val || 0) > 0);
+    };
+
+    const nonZeroDataList = fullList.map(item => {
+      if (item.data) {
+        return isRowNonZero(item) ? item : null;
+      }
+      return item;
+    });
+
+    for (let i = 0; i < nonZeroDataList.length; i++) {
+      const current = nonZeroDataList[i];
+      if (!current) continue;
+
+      if (current.isBoldHeader || current.isSubHeader) {
+        let hasActiveChild = false;
+        for (let j = i + 1; j < nonZeroDataList.length; j++) {
+          const next = nonZeroDataList[j];
+          if (!next) continue;
+          if (current.isSubHeader && (next.isSubHeader || next.isBoldHeader)) {
+            break;
+          }
+          if (current.isBoldHeader && next.isBoldHeader) {
+            break;
+          }
+          if (next.data) {
+            hasActiveChild = true;
+            break;
+          }
+        }
+
+        if (hasActiveChild) {
+          filteredList.push(current);
+        }
+      } else {
+        filteredList.push(current);
+      }
+    }
+
+    return filteredList;
   }, [detail]);
 
   return (
     <div className="flex flex-col gap-6 h-full text-zinc-700 dark:text-zinc-300 relative">
       {/* CSS style block for browser print settings */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           /* Reset parent heights and overflows to enable full page printing */
           html, body, #__next, .h-screen, .overflow-hidden, main, .overflow-y-auto, [class*="h-screen"], [class*="overflow-hidden"], [class*="overflow-y-auto"] {
@@ -412,13 +457,24 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
           <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
             Báo cáo tổng hợp tình hình tai nạn lao động - Kỳ báo cáo: {report.periodLabel} năm {year}
           </h3>
+          <div className="text-sm text-zinc-500 dark:text-zinc-400 font-semibold flex items-center gap-4 flex-wrap mt-0.5">
+            <span>Doanh nghiệp: <strong className="text-zinc-800 dark:text-zinc-200">{detail?.businessName || report.businessName || "-"}</strong></span>
+            <span className="text-zinc-300 dark:text-zinc-700">|</span>
+            <span>Mã số thuế: <strong className="text-zinc-800 dark:text-zinc-200">{detail?.taxCode || report.taxCode || "-"}</strong></span>
+          </div>
           <div className="no-print flex items-center gap-2 text-xs">
             <span className="font-semibold text-red-500 flex items-center gap-1">
               **Vui lòng đính kèm báo cáo TNLĐ có dấu mộc công ty:
             </span>
             {detail?.attachments && detail.attachments.length > 0 ? (
               <a
-                href={detail.attachments[0].fileUrl}
+                href={`/department/dashboard/view-document?url=${encodeURIComponent(
+                  detail.attachments[0].fileUrl && detail.attachments[0].fileUrl !== "#"
+                    ? detail.attachments[0].fileUrl
+                    : "/template.pdf"
+                )}&name=${encodeURIComponent(
+                  detail.attachments[0].displayName || detail.attachments[0].originalName || "baocaoTNLĐ.pdf"
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 dark:text-blue-400 hover:underline font-bold"
@@ -576,13 +632,13 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
                           <td className="p-3 pl-8 text-zinc-700 dark:text-zinc-300 font-medium">
                             {row.title}
                           </td>
-                          <td className="p-3 border-l border-r border-zinc-200 dark:border-zinc-800 text-center font-mono font-bold text-zinc-500">
+                          <td className="p-3 border-l border-r border-zinc-200 dark:border-zinc-800 text-center font-bold text-zinc-500">
                             {row.code || "-"}
                           </td>
                           {row.data?.map((val, subIdx) => (
                             <td
                               key={subIdx}
-                              className="p-3 border-r border-zinc-200 dark:border-zinc-800 text-center font-semibold font-mono"
+                              className="p-3 border-r border-zinc-200 dark:border-zinc-800 text-center font-semibold"
                             >
                               {val}
                             </td>
@@ -641,7 +697,7 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
                   </thead>
 
                   <tbody>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-center font-semibold font-mono text-sm">
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-center font-semibold text-sm">
                       <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-left font-bold text-zinc-900 dark:text-zinc-100">
                         {detail ? detail.totalDaysOff : "0"}
                       </td>
