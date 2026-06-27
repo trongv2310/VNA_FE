@@ -212,10 +212,14 @@ export const DepartmentDashboardScreen: React.FC = () => {
     isSelfUpdatingRef.current = true;
     try {
       const response = await changePassword(currentPw, newPw, confirmPw);
-      showToastMsg(String(response.message || "Đổi mật khẩu thành công"), "success");
+      showToastMsg(String(response.message || "Đổi mật khẩu thành công. Đang đăng xuất..."), "success");
       setShowChangePasswordModal(false);
-      // Fetch fresh profile to update local updatedAt
-      await getProfile();
+      
+      // Clear auth tokens and redirect to login page
+      clearAuthTokens();
+      window.setTimeout(() => {
+        router.push("/department/login");
+      }, 1000);
     } catch (error) {
       showToastMsg(error instanceof Error ? error.message : "Đổi mật khẩu thất bại", "error");
     } finally {

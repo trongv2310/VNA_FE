@@ -306,8 +306,9 @@ export async function resetPassword(
   });
 }
 
-export async function sendChangeGmailOtp() {
-  return request<ChangeGmailOtpPayload>("/auth/change-gmail/send-otp", {
+export async function sendChangeGmailOtp(newEmail?: string) {
+  const path = `/auth/change-gmail/send-otp${newEmail ? `?newEmail=${encodeURIComponent(newEmail)}` : ""}`;
+  return request<ChangeGmailOtpPayload>(path, {
     method: "POST",
     headers: authHeaders(),
   });
@@ -716,7 +717,7 @@ export async function getRegistrationOptions(): Promise<ApiResponse<{ businessTy
   };
 }
 
-export async function sendRegistrationOtp(body: { email: string }) {
+export async function sendRegistrationOtp(body: { email: string; taxCode?: string }) {
   return request<{ email: string; expiresInSeconds: number }>("/businesses/register/send-otp", {
     method: "POST",
     body: JSON.stringify(body),
@@ -744,8 +745,9 @@ export async function getMyBusinessProfile() {
   });
 }
 
-export async function sendBusinessProfileEmailOtp() {
-  return request<any>("/businesses/me/email/send-otp", {
+export async function sendBusinessProfileEmailOtp(newEmail?: string) {
+  const path = `/businesses/me/email/send-otp${newEmail ? `?newEmail=${encodeURIComponent(newEmail)}` : ""}`;
+  return request<any>(path, {
     method: "POST",
     headers: authHeaders(),
   });

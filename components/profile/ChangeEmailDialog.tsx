@@ -23,7 +23,7 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
   onCancel,
   showToast,
 }) => {
-  const [step, setStep] = useState<"otp" | "newEmail">("otp");
+  const [step, setStep] = useState<"otp" | "newEmail">("newEmail");
   const [otp, setOtp] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [timeLeft, setTimeLeft] = useState(initialExpiresInSeconds);
@@ -52,7 +52,7 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
     setIsLoading(true);
     setErrorMsg("");
     try {
-      const response = await sendChangeGmailOtp();
+      const response = await sendChangeGmailOtp(newEmail.trim());
       setTimeLeft(response.data?.expiresInSeconds || 60);
       setOtp("");
       showToast(String(response.message || "Mã OTP mới đã được gửi"), "success");
@@ -75,11 +75,15 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
     setIsLoading(true);
     setErrorMsg("");
     try {
-      const response = await verifyChangeGmailOtp(normalizedOtp);
-      showToast(String(response.message || "Xác thực OTP thành công"), "success");
-      setStep("newEmail");
+      // 1. Verify OTP first
+      await verifyChangeGmailOtp(normalizedOtp);
+      // 2. Perform the update
+      const response = await updateChangeGmail(newEmail.trim());
+      const savedEmail = response.data?.email || newEmail.trim();
+      onSave(savedEmail);
+      showToast(String(response.message || "Thay đổi email thành công"), "success");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Mã OTP không hợp lệ");
+      setErrorMsg(error instanceof Error ? error.message : "Mã OTP không hợp lệ hoặc thay đổi email thất bại");
     } finally {
       setIsLoading(false);
     }
@@ -108,12 +112,14 @@ export const ChangeEmailDialog: React.FC<ChangeEmailDialogProps> = ({
     setIsLoading(true);
     setErrorMsg("");
     try {
-      const response = await updateChangeGmail(trimmedEmail);
-      const savedEmail = response.data?.email || trimmedEmail;
-      onSave(savedEmail);
-      showToast(String(response.message || "Thay đổi email thành công"), "success");
+      // Send OTP and check duplicate concurrently
+      const response = await sendChangeGmailOtp(trimmedEmail);
+      setTimeLeft(response.data?.expiresInSeconds || 60);
+      setOtp("");
+      setStep("otp");
+      showToast(String(response.message || "Mã OTP đã được gửi về email hiện tại"), "success");
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : "Không thể thay đổi email");
+      setErrorMsg(error instanceof Error ? error.message : "Không thể gửi OTP đổi email");
     } finally {
       setIsLoading(false);
     }

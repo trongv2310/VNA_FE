@@ -473,49 +473,15 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
     }
   };
 
-  // Start the email change flow for Profile Edit
-  const handleStartEmailChange = async () => {
-    setIsSubmitting(true);
-    try {
-      const res = await sendBusinessProfileEmailOtp();
-      if (res.success) {
-        setOtpValue("");
-        setOtpTimer(300);
-        setShowProfileOtpModal(true);
-        showToast(res.message || "Đã gửi mã OTP về email hiện tại", "success");
-      } else {
-        throw new Error(res.message);
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Gửi mã OTP thất bại", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
+  // Start the email change flow for Profile Edit - asks for the new email first
+  const handleStartEmailChange = () => {
+    setNewEmailValue("");
+    setNewEmailError("");
+    setShowNewEmailModal(true);
   };
 
-  // Verify OTP for Profile Edit Email Change
-  const handleVerifyProfileOtp = async () => {
-    setIsVerifyingOtp(true);
-    try {
-      const res = await verifyBusinessProfileEmailOtp(otpValue);
-      if (res.success) {
-        showToast(res.message || "Xác thực OTP thành công", "success");
-        setShowProfileOtpModal(false);
-        setNewEmailValue("");
-        setNewEmailError("");
-        setShowNewEmailModal(true);
-      } else {
-        throw new Error(res.message);
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Mã OTP không chính xác hoặc đã hết hạn", "error");
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  // Save the new email address for Profile Edit
-  const handleSaveNewEmail = async () => {
+  // Validate the new email and send OTP to the current email
+  const handleSendOtpForNewEmail = async () => {
     const email = newEmailValue.trim();
     if (!email) {
       setNewEmailError("Email không được để trống");
@@ -525,8 +491,34 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       setNewEmailError("Email không hợp lệ");
       return;
     }
+    if (email.toLowerCase() === formData.email.toLowerCase()) {
+      setNewEmailError("Email mới phải khác email hiện tại");
+      return;
+    }
     setNewEmailError("");
     setIsSavingNewEmail(true);
+    try {
+      const res = await sendBusinessProfileEmailOtp(email);
+      if (res.success) {
+        showToast(res.message || "Đã gửi mã OTP về email hiện tại", "success");
+        setShowNewEmailModal(false);
+        setOtpValue("");
+        setOtpTimer(300);
+        setShowProfileOtpModal(true);
+      } else {
+        throw new Error(res.message || "Gửi mã OTP thất bại");
+      }
+    } catch (err) {
+      setNewEmailError(err instanceof Error ? err.message : "Gửi mã OTP thất bại");
+    } finally {
+      setIsSavingNewEmail(false);
+    }
+  };
+
+  // Save the new email address
+  const executeSaveNewEmail = async () => {
+    const email = newEmailValue.trim();
+    setIsSubmitting(true);
     try {
       const fd = new FormData();
       fd.append("email", email);
@@ -534,14 +526,32 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       if (res.success && res.data) {
         showToast("Thay đổi email thành công", "success");
         setFormData((prev) => ({ ...prev, email: res.data.email || email }));
-        setShowNewEmailModal(false);
       } else {
         throw new Error(res.message || "Thay đổi email thất bại");
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Thay đổi email thất bại", "error");
     } finally {
-      setIsSavingNewEmail(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  // Verify OTP and save the new email
+  const handleVerifyProfileOtp = async () => {
+    setIsVerifyingOtp(true);
+    try {
+      const res = await verifyBusinessProfileEmailOtp(otpValue);
+      if (res.success) {
+        showToast(res.message || "Xác thực OTP thành công", "success");
+        setShowProfileOtpModal(false);
+        await executeSaveNewEmail();
+      } else {
+        throw new Error(res.message);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Mã OTP không chính xác hoặc đã hết hạn", "error");
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -613,7 +623,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
     if (isRegistration) {
       setIsSubmitting(true);
       try {
-        const otpRes = await sendRegistrationOtp({ email });
+        const otpRes = await sendRegistrationOtp({ email, taxCode: txCode });
         if (otpRes.success) {
           setOtpValue("");
           setOtpTimer(300);
@@ -624,7 +634,11 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Gửi OTP thất bại";
         showToast(errorMsg, "error");
-        setErrors((prev) => ({ ...prev, email: errorMsg }));
+        if (errorMsg.includes("Mã số thuế") || errorMsg.includes("MST")) {
+          setErrors((prev) => ({ ...prev, taxCode: errorMsg }));
+        } else {
+          setErrors((prev) => ({ ...prev, email: errorMsg }));
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -1559,7 +1573,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   onClick={async () => {
                     setIsResendingOtp(true);
                     try {
-                      const res = await sendRegistrationOtp({ email: formData.email });
+                      const res = await sendRegistrationOtp({ email: formData.email, taxCode: formData.taxCode });
                       if (res.success) {
                         showToast(res.message || "Đã gửi lại mã OTP thành công", "success");
                         setOtpTimer(300);
@@ -1778,16 +1792,16 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
               <button
                 type="button"
                 disabled={isSavingNewEmail}
-                onClick={handleSaveNewEmail}
+                onClick={handleSendOtpForNewEmail}
                 className="w-full py-3 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-bold text-sm shadow-md shadow-blue-500/10 active:scale-99 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSavingNewEmail ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Đang lưu...</span>
+                    <span>Đang gửi mã...</span>
                   </>
                 ) : (
-                  "Lưu"
+                  "Tiếp tục"
                 )}
               </button>
 
