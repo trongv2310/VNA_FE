@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Eye,
   Pencil,
@@ -24,6 +24,7 @@ import {
   getReportPeriods,
   getMyBusinessProfile
 } from "../services/api";
+import { exportReportDocx } from "../utils/reportExporter";
 
 interface TnldTheoHdldProps {
   showToast: (message: string, type: "success" | "error") => void;
@@ -62,7 +63,8 @@ interface ReportData {
   reportPeriodId?: number;
   year: number;
   period: string; // "6 tháng" | "Cả năm"
-  status: "Đang báo cáo" | "Đã tiếp nhận";
+  status: "Đang báo cáo" | "Đang chờ duyệt" | "Đã tiếp nhận" | "Từ chối phê duyệt";
+  rejectReason?: string;
   enterpriseName: string;
   taxCode: string;
   businessType: string;
@@ -279,6 +281,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
   const [viewMode, setViewMode] = useState<"list" | "declaration">("list");
   const [selectedReport, setSelectedReport] = useState<ReportData | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   
   // Year Filter in List
   const [selectedYearFilter, setSelectedYearFilter] = useState<number>(2026);
@@ -401,6 +404,89 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     return partial ?? JOB_CATEGORIES[0];
   };
 
+  const mapApiReportToFrontend = (r: any): ReportData => {
+    const allowanceDetail = r.details?.find(
+      (d: any) => d.section === "ARTICLE_39_ALLOWANCE"
+    );
+
+    return {
+      id: r.id,
+      reportPeriodId: r.reportPeriod?.id,
+      year: r.reportPeriod?.year || new Date().getFullYear(),
+      period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
+      status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đang chờ duyệt" : r.status === "REJECTED" ? "Từ chối phê duyệt" : "Đang báo cáo",
+      rejectReason: r.rejectReason || "",
+      enterpriseName: r.businessName || profile?.businessName || "",
+      taxCode: r.taxCode || profile?.taxCode || "",
+      businessType: r.businessType || profile?.businessType || "",
+      industry: r.industryName || profile?.industryName || "",
+      laoDongCoSo: String(r.totalEmployees || 0),
+      laoDongNu: String(r.femaleEmployees || 0),
+      quyLuong: formatNumberWithDots(r.totalPayroll || 0),
+      tongSoVu: String(r.totalAccidents || 0),
+      soVuCoNguoiChet: String(r.fatalAccidents || 0),
+      soVuHaiNguoiTroLen: String(r.accidentsWithTwoOrMoreVictims || 0),
+      tongSoNguoiBiNan: String(r.totalVictims || 0),
+      soLaoDongNuBiNan: String(r.femaleVictims || 0),
+      soNguoiChet: String(r.deathVictims || 0),
+      soNguoiThuongNang: String(r.severeInjuryVictims || 0),
+      soNguoiBiNanKhongQL: String(r.victimsNotUnderManagement || 0),
+      laoDongNuBiNanKhongQL: String(r.femaleVictimsNotUnderManagement || 0),
+      soNguoiChetKhongQL: String(r.deathVictimsNotUnderManagement || 0),
+      soNguoiThuongNangKhongQL: String(r.severeInjuryVictimsNotUnderManagement || 0),
+      chiPhiYTe: formatNumberWithDots(r.medicalCost || 0),
+      chiPhiLuong: formatNumberWithDots(r.salaryPaymentCost || 0),
+      chiPhiBoiThuong: formatNumberWithDots(r.allowanceCost || 0),
+      tongChiPhi: formatNumberWithDots(r.totalCost || 0),
+      soNgayNghi: String(r.totalDaysOff || 0),
+      thietHaiTaiSan: formatNumberWithDots(r.propertyDamage || 0),
+      details: (r.details || [])
+        .filter((d: any) => d.section === "ACCIDENT")
+        .map((d: any) => ({
+          id: d.id,
+          causeCategory: mapCauseToFrontend(d.accidentCauseCatalog),
+          factorCategory: mapFactorToFrontend(d.injuryFactorCatalog),
+          jobCategory: mapJobToFrontend(d.occupationCatalog),
+          tongSoVu: String(d.totalAccidents || 0),
+          soVuCoNguoiChet: String(d.fatalAccidents || 0),
+          soVuHaiNguoiTroLen: String(d.accidentsWithTwoOrMoreVictims || 0),
+          tongSoNguoiBiNan: String(d.totalVictims || 0),
+          soLaoDongNuBiNan: String(d.femaleVictims || 0),
+          soNguoiChet: String(d.deathVictims || 0),
+          soNguoiThuongNang: String(d.severeInjuryVictims || 0),
+          soNguoiBiNanKhongQL: String(d.victimsNotUnderManagement || 0),
+          laoDongNuBiNanKhongQL: String(d.femaleVictimsNotUnderManagement || 0),
+          soNguoiChetKhongQL: String(d.deathVictimsNotUnderManagement || 0),
+          soNguoiThuongNangKhongQL: String(d.severeInjuryVictimsNotUnderManagement || 0),
+          chiPhiYTe: formatNumberWithDots(d.medicalCost || 0),
+          chiPhiLuong: formatNumberWithDots(d.salaryPaymentCost || 0),
+          chiPhiBoiThuong: formatNumberWithDots(d.allowanceCost || 0),
+          tongChiPhi: formatNumberWithDots(d.totalCost || 0),
+          soNgayNghi: String(d.daysOff || 0),
+          thietHaiTaiSan: formatNumberWithDots(d.propertyDamage || 0)
+        })),
+      tc_tongSoVu: String(allowanceDetail?.totalAccidents || 0),
+      tc_soVuCoNguoiChet: String(allowanceDetail?.fatalAccidents || 0),
+      tc_soVuHaiNguoiTroLen: String(allowanceDetail?.accidentsWithTwoOrMoreVictims || 0),
+      tc_tongSoNguoiBiNan: String(allowanceDetail?.totalVictims || 0),
+      tc_soLaoDongNuBiNan: String(allowanceDetail?.femaleVictims || 0),
+      tc_soNguoiChet: String(allowanceDetail?.deathVictims || 0),
+      tc_soNguoiThuongNang: String(allowanceDetail?.severeInjuryVictims || 0),
+      tc_soNguoiBiNanKhongQL: String(allowanceDetail?.victimsNotUnderManagement || 0),
+      tc_laoDongNuBiNanKhongQL: String(allowanceDetail?.femaleVictimsNotUnderManagement || 0),
+      tc_soNguoiChetKhongQL: String(allowanceDetail?.deathVictimsNotUnderManagement || 0),
+      tc_soNguoiThuongNangKhongQL: String(allowanceDetail?.severeInjuryVictimsNotUnderManagement || 0),
+      tc_chiPhiYTe: formatNumberWithDots(allowanceDetail?.medicalCost || 0),
+      tc_chiPhiLuong: formatNumberWithDots(allowanceDetail?.salaryPaymentCost || 0),
+      tc_chiPhiBoiThuong: formatNumberWithDots(allowanceDetail?.allowanceCost || 0),
+      tc_tongChiPhi: formatNumberWithDots(allowanceDetail?.totalCost || 0),
+      tc_soNgayNghi: String(allowanceDetail?.daysOff || 0),
+      tc_thietHaiTaiSan: formatNumberWithDots(allowanceDetail?.propertyDamage || 0)
+    };
+  };
+
+
+
   // Fetch catalogs and profile on mount
   useEffect(() => {
     const initData = async () => {
@@ -456,7 +542,8 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           reportPeriodId: r.reportPeriod?.id,
           year: r.reportPeriod?.year || new Date().getFullYear(),
           period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
-          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
+          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đang chờ duyệt" : r.status === "REJECTED" ? "Từ chối phê duyệt" : "Đang báo cáo",
+          rejectReason: r.rejectReason || "",
           enterpriseName: r.businessName || profile?.businessName || "",
           taxCode: r.taxCode || profile?.taxCode || "",
           businessType: r.businessType || profile?.businessType || "",
@@ -621,9 +708,6 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       const res = await getMyLaborAccidentReportDetail(report.id);
       if (res.success && res.data) {
         const r = res.data;
-        const allowanceDetail = r.details?.find(
-          (d: any) => d.section === "ARTICLE_39_ALLOWANCE"
-        );
 
         if (r.attachments && r.attachments.length > 0) {
           setUploadedFileName(r.attachments[0].displayName || r.attachments[0].originalName || "");
@@ -632,80 +716,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           setUploadedFileUrl("");
         }
 
-        const fullReport: ReportData = {
-          id: r.id,
-          reportPeriodId: r.reportPeriod?.id,
-          year: r.reportPeriod?.year || new Date().getFullYear(),
-          period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
-          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
-          enterpriseName: r.businessName || profile?.businessName || "",
-          taxCode: r.taxCode || profile?.taxCode || "",
-          businessType: r.businessType || profile?.businessType || "",
-          industry: r.industryName || profile?.industryName || "",
-          laoDongCoSo: String(r.totalEmployees || 0),
-          laoDongNu: String(r.femaleEmployees || 0),
-          quyLuong: formatNumberWithDots(r.totalPayroll || 0),
-          tongSoVu: String(r.totalAccidents || 0),
-          soVuCoNguoiChet: String(r.fatalAccidents || 0),
-          soVuHaiNguoiTroLen: String(r.accidentsWithTwoOrMoreVictims || 0),
-          tongSoNguoiBiNan: String(r.totalVictims || 0),
-          soLaoDongNuBiNan: String(r.femaleVictims || 0),
-          soNguoiChet: String(r.deathVictims || 0),
-          soNguoiThuongNang: String(r.severeInjuryVictims || 0),
-          soNguoiBiNanKhongQL: String(r.victimsNotUnderManagement || 0),
-          laoDongNuBiNanKhongQL: String(r.femaleVictimsNotUnderManagement || 0),
-          soNguoiChetKhongQL: String(r.deathVictimsNotUnderManagement || 0),
-          soNguoiThuongNangKhongQL: String(r.severeInjuryVictimsNotUnderManagement || 0),
-          chiPhiYTe: formatNumberWithDots(r.medicalCost || 0),
-          chiPhiLuong: formatNumberWithDots(r.salaryPaymentCost || 0),
-          chiPhiBoiThuong: formatNumberWithDots(r.allowanceCost || 0),
-          tongChiPhi: formatNumberWithDots(r.totalCost || 0),
-          soNgayNghi: String(r.totalDaysOff || 0),
-          thietHaiTaiSan: formatNumberWithDots(r.propertyDamage || 0),
-          details: (r.details || [])
-            .filter((d: any) => d.section === "ACCIDENT")
-            .map((d: any) => ({
-              id: d.id,
-              causeCategory: mapCauseToFrontend(d.accidentCauseCatalog),
-              factorCategory: mapFactorToFrontend(d.injuryFactorCatalog),
-              jobCategory: mapJobToFrontend(d.occupationCatalog),
-              tongSoVu: String(d.totalAccidents || 0),
-              soVuCoNguoiChet: String(d.fatalAccidents || 0),
-              soVuHaiNguoiTroLen: String(d.accidentsWithTwoOrMoreVictims || 0),
-              tongSoNguoiBiNan: String(d.totalVictims || 0),
-              soLaoDongNuBiNan: String(d.femaleVictims || 0),
-              soNguoiChet: String(d.deathVictims || 0),
-              soNguoiThuongNang: String(d.severeInjuryVictims || 0),
-              soNguoiBiNanKhongQL: String(d.victimsNotUnderManagement || 0),
-              laoDongNuBiNanKhongQL: String(d.femaleVictimsNotUnderManagement || 0),
-              soNguoiChetKhongQL: String(d.deathVictimsNotUnderManagement || 0),
-              soNguoiThuongNangKhongQL: String(d.severeInjuryVictimsNotUnderManagement || 0),
-              chiPhiYTe: formatNumberWithDots(d.medicalCost || 0),
-              chiPhiLuong: formatNumberWithDots(d.salaryPaymentCost || 0),
-              chiPhiBoiThuong: formatNumberWithDots(d.allowanceCost || 0),
-              tongChiPhi: formatNumberWithDots(d.totalCost || 0),
-              soNgayNghi: String(d.daysOff || 0),
-              thietHaiTaiSan: formatNumberWithDots(d.propertyDamage || 0)
-            })),
-          tc_tongSoVu: String(allowanceDetail?.totalAccidents || 0),
-          tc_soVuCoNguoiChet: String(allowanceDetail?.fatalAccidents || 0),
-          tc_soVuHaiNguoiTroLen: String(allowanceDetail?.accidentsWithTwoOrMoreVictims || 0),
-          tc_tongSoNguoiBiNan: String(allowanceDetail?.totalVictims || 0),
-          tc_soLaoDongNuBiNan: String(allowanceDetail?.femaleVictims || 0),
-          tc_soNguoiChet: String(allowanceDetail?.deathVictims || 0),
-          tc_soNguoiThuongNang: String(allowanceDetail?.severeInjuryVictims || 0),
-          tc_soNguoiBiNanKhongQL: String(allowanceDetail?.victimsNotUnderManagement || 0),
-          tc_laoDongNuBiNanKhongQL: String(allowanceDetail?.femaleVictimsNotUnderManagement || 0),
-          tc_soNguoiChetKhongQL: String(allowanceDetail?.deathVictimsNotUnderManagement || 0),
-          tc_soNguoiThuongNangKhongQL: String(allowanceDetail?.severeInjuryVictimsNotUnderManagement || 0),
-          tc_chiPhiYTe: formatNumberWithDots(allowanceDetail?.medicalCost || 0),
-          tc_chiPhiLuong: formatNumberWithDots(allowanceDetail?.salaryPaymentCost || 0),
-          tc_chiPhiBoiThuong: formatNumberWithDots(allowanceDetail?.allowanceCost || 0),
-          tc_tongChiPhi: formatNumberWithDots(allowanceDetail?.totalCost || 0),
-          tc_soNgayNghi: String(allowanceDetail?.daysOff || 0),
-          tc_thietHaiTaiSan: formatNumberWithDots(allowanceDetail?.propertyDamage || 0)
-        };
-
+        const fullReport = mapApiReportToFrontend(r);
         setFormData(fullReport);
         if (fullReport.details && fullReport.details.length > 0) {
           setExpandedBlocks({ 1: true });
@@ -902,6 +913,14 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         if (idx === blockIdx) {
           const updated = { ...b, [field]: val };
           
+          // Auto-calculate accident stats
+          const totalVictims = parseDotsToNumber(updated.tongSoNguoiBiNan || "0");
+          const deaths = parseDotsToNumber(updated.soNguoiChet || "0") + parseDotsToNumber(updated.soNguoiChetKhongQL || "0");
+          
+          updated.tongSoVu = "1";
+          updated.soVuCoNguoiChet = deaths > 0 ? "1" : "0";
+          updated.soVuHaiNguoiTroLen = totalVictims >= 2 ? "1" : "0";
+
           if (field === "chiPhiYTe" || field === "chiPhiLuong" || field === "chiPhiBoiThuong") {
             const yte = parseDotsToNumber(field === "chiPhiYTe" ? val : b.chiPhiYTe);
             const luong = parseDotsToNumber(field === "chiPhiLuong" ? val : b.chiPhiLuong);
@@ -1199,6 +1218,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           const blockMsgs: string[] = [];
 
           countFields.forEach(f => {
+            if (f === "tongSoVu" || f === "soVuCoNguoiChet" || f === "soVuHaiNguoiTroLen") return;
             if (block[f as keyof AccidentDetailBlock] === undefined || block[f as keyof AccidentDetailBlock] === null || String(block[f as keyof AccidentDetailBlock]).trim() === "") {
               blockErrs[f] = "Bắt buộc";
               blockHasError = true;
@@ -1619,9 +1639,79 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     showToast("Đã hủy bỏ khai báo báo cáo.", "success");
   };
 
-  // Actions in General View
-  const handlePrint = () => {
-    window.print();
+  const saveAndGetPrintData = async (): Promise<any | null> => {
+    if (!profile) {
+      showToast("Không tìm thấy thông tin doanh nghiệp. Vui lòng thử lại sau.", "error");
+      return null;
+    }
+
+    if (!formData || !formData.reportPeriodId) {
+      showToast("Vui lòng hoàn thiện và lưu thông tin kỳ báo cáo trước khi in.", "error");
+      return null;
+    }
+
+    if (isReadOnly) {
+      return formData;
+    }
+
+    // Auto-save in edit/creation mode
+    if (!validateSection("enterprise-info")) {
+      setCurrentSection("enterprise-info");
+      showToast("Vui lòng hoàn thiện thông tin doanh nghiệp trước khi in báo cáo.", "error");
+      return null;
+    }
+    if (!validateSection("accident-stats")) {
+      setCurrentSection("accident-stats");
+      showToast("Vui lòng hoàn thiện thông tin tai nạn lao động trước khi in báo cáo.", "error");
+      return null;
+    }
+    if (!validateSection("accident-benefits")) {
+      setCurrentSection("accident-benefits");
+      showToast("Vui lòng hoàn thiện thông tin tai nạn lao động được trợ cấp trước khi in báo cáo.", "error");
+      return null;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = buildFormData();
+      if (!data) {
+        showToast("Không thể tổng hợp dữ liệu báo cáo.", "error");
+        return null;
+      }
+      const res = await saveLaborAccidentReportDraft(data);
+      if (res.success && res.data) {
+        const fullReport = mapApiReportToFrontend(res.data);
+        setFormData(fullReport);
+        sessionStorage.removeItem(`vna_report_form_${res.data.id}`);
+        await loadReportsAndPeriods();
+        return fullReport;
+      } else {
+        showToast(res.message || "Tự động lưu báo cáo thất bại.", "error");
+        return null;
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Có lỗi xảy ra khi tự động lưu báo cáo.", "error");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePrintWord = async () => {
+    const data = await saveAndGetPrintData();
+    if (!data) return;
+
+    setIsGeneratingWord(true);
+    try {
+      await exportReportDocx(data, profile);
+      showToast("Tải báo cáo Word thành công!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Không thể xuất báo cáo Word.", "error");
+    } finally {
+      setIsGeneratingWord(false);
+    }
   };
 
   const handleSubmitReport = async () => {
@@ -1726,8 +1816,34 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
     return val1 + val2;
   };
 
+  const isCauseRowEmpty = (title: string) => {
+    const fields: (keyof AccidentDetailBlock)[] = [
+      "tongSoVu", "soVuCoNguoiChet", "soVuHaiNguoiTroLen", "tongSoNguoiBiNan", "soNguoiBiNanKhongQL",
+      "soLaoDongNuBiNan", "laoDongNuBiNanKhongQL", "soNguoiChet", "soNguoiChetKhongQL", "soNguoiThuongNang", "soNguoiThuongNangKhongQL"
+    ];
+    return fields.every(field => sumBlocksByCause(title, field) === 0);
+  };
+
+  const isFactorRowEmpty = (factor: string) => {
+    const fields: (keyof AccidentDetailBlock)[] = [
+      "tongSoVu", "soVuCoNguoiChet", "soVuHaiNguoiTroLen", "tongSoNguoiBiNan", "soNguoiBiNanKhongQL",
+      "soLaoDongNuBiNan", "laoDongNuBiNanKhongQL", "soNguoiChet", "soNguoiChetKhongQL", "soNguoiThuongNang", "soNguoiThuongNangKhongQL"
+    ];
+    return fields.every(field => sumBlocksByFactor(factor, field) === 0);
+  };
+
+  const isJobRowEmpty = (job: string) => {
+    const fields: (keyof AccidentDetailBlock)[] = [
+      "tongSoVu", "soVuCoNguoiChet", "soVuHaiNguoiTroLen", "tongSoNguoiBiNan", "soNguoiBiNanKhongQL",
+      "soLaoDongNuBiNan", "laoDongNuBiNanKhongQL", "soNguoiChet", "soNguoiChetKhongQL", "soNguoiThuongNang", "soNguoiThuongNangKhongQL"
+    ];
+    return fields.every(field => sumBlocksByJob(job, field) === 0);
+  };
+
   // Helper row renderer for general cause view
   const renderCauseRow = (title: string, code: string) => {
+    if (isCauseRowEmpty(title)) return null;
+
     return (
       <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
         <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{title}</td>
@@ -1772,6 +1888,25 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         return "Xem tổng quan báo cáo tai nạn lao động";
     }
   };
+
+  const hasVisibleCauseA = formData ? CAUSE_CATEGORIES.slice(0, 6).some(title => !isCauseRowEmpty(title)) : false;
+  const hasVisibleCauseB = formData ? CAUSE_CATEGORIES.slice(6, 9).some(title => !isCauseRowEmpty(title)) : false;
+  const hasVisibleFactors = formData ? FACTOR_CATEGORIES.some(factor => !isFactorRowEmpty(factor)) : false;
+  const hasVisibleJobs = formData ? JOB_CATEGORIES.some(job => !isJobRowEmpty(job)) : false;
+
+  const isSection2Empty = formData ? [
+    Number(formData.tc_tongSoVu || 0),
+    Number(formData.tc_soVuCoNguoiChet || 0),
+    Number(formData.tc_soVuHaiNguoiTroLen || 0),
+    Number(formData.tc_tongSoNguoiBiNan || 0),
+    Number(formData.tc_soNguoiBiNanKhongQL || 0),
+    Number(formData.tc_soLaoDongNuBiNan || 0),
+    Number(formData.tc_laoDongNuBiNanKhongQL || 0),
+    Number(formData.tc_soNguoiChet || 0),
+    Number(formData.tc_soNguoiChetKhongQL || 0),
+    Number(formData.tc_soNguoiThuongNang || 0),
+    Number(formData.tc_soNguoiThuongNangKhongQL || 0)
+  ].every(val => val === 0) : true;
 
   if (viewMode === "list") {
     const filteredReports = reports.filter(r => r.year === selectedYearFilter);
@@ -1849,10 +1984,10 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                           >
                             <Eye className="h-[18px] w-[18px] text-zinc-400 group-hover:text-green-600 transition-colors" />
                           </button>
-                          {rep.status === "Đang báo cáo" && (
+                          {(rep.status === "Đang báo cáo" || rep.status === "Từ chối phê duyệt") && (
                             <button
                               onClick={() => handleEditClick(rep, false)}
-                              title="Chỉnh sửa khai báo"
+                              title={rep.status === "Từ chối phê duyệt" ? "Cập nhật / Nộp lại" : "Chỉnh sửa khai báo"}
                               className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all cursor-pointer group"
                             >
                               <Pencil className="h-[18px] w-[18px] text-zinc-400 group-hover:text-blue-600 transition-colors" />
@@ -1872,12 +2007,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-50 dark:bg-zinc-900 select-none">
                           <span className={`w-2 h-2 rounded-full ${
-                            rep.status === "Đang báo cáo"
-                              ? "bg-gray-400"
-                              : "bg-blue-600 animate-pulse"
+                            rep.status === "Đang báo cáo" ? "bg-zinc-400" :
+                            rep.status === "Đang chờ duyệt" ? "bg-amber-500 animate-pulse" :
+                            rep.status === "Đã tiếp nhận" ? "bg-blue-600" :
+                            rep.status === "Từ chối phê duyệt" ? "bg-red-500 animate-pulse" : "bg-zinc-400"
                           }`} />
                           <span className={
-                            rep.status === "Đang báo cáo" ? "text-zinc-550" : "text-blue-600"
+                            rep.status === "Đang báo cáo" ? "text-zinc-550" :
+                            rep.status === "Đang chờ duyệt" ? "text-amber-600 dark:text-amber-400" :
+                            rep.status === "Đã tiếp nhận" ? "text-blue-600 dark:text-blue-400" :
+                            rep.status === "Từ chối phê duyệt" ? "text-red-500 dark:text-red-400" : "text-zinc-550"
                           }>
                             {rep.status}
                           </span>
@@ -1936,11 +2075,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           {isReadOnly ? (
             <>
               <button
-                onClick={handlePrint}
-                className="flex items-center gap-1.5 px-5 py-2 border border-blue-600 text-blue-600 bg-white hover:bg-blue-50/20 rounded-xl font-bold text-sm transition-all cursor-pointer"
+                disabled={isGeneratingWord}
+                onClick={handlePrintWord}
+                className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 bg-white hover:bg-blue-50/60 rounded-xl font-bold text-sm transition-all cursor-pointer disabled:opacity-50"
               >
-                <Printer className="w-4 h-4" />
-                <span>In báo cáo</span>
+                {isGeneratingWord ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Printer className="w-4 h-4" />
+                )}
+                <span>{isGeneratingWord ? "Đang tạo Word..." : "In báo cáo"}</span>
               </button>
               <button
                 onClick={() => setViewMode("list")}
@@ -1962,11 +2106,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               {currentSection === "general-view" ? (
                 <>
                   <button
-                    onClick={handlePrint}
-                    className="flex items-center gap-1.5 px-5 py-2 border border-blue-600 text-blue-600 bg-white hover:bg-blue-50/20 rounded-xl font-bold text-sm transition-all cursor-pointer"
+                    disabled={isGeneratingWord}
+                    onClick={handlePrintWord}
+                    className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 bg-white hover:bg-blue-50/60 rounded-xl font-bold text-sm transition-all cursor-pointer disabled:opacity-50"
                   >
-                    <Printer className="w-4 h-4" />
-                    <span>In báo cáo</span>
+                    {isGeneratingWord ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Printer className="w-4 h-4" />
+                    )}
+                    <span>{isGeneratingWord ? "Đang tạo Word..." : "In báo cáo"}</span>
                   </button>
                   <button
                     disabled={!uploadedFileName}
@@ -2037,6 +2186,17 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {formData && formData.status === "Từ chối phê duyệt" && formData.rejectReason && (
+        <div className="bg-red-50 dark:bg-red-955/10 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex flex-col gap-1.5 select-text animate-in fade-in slide-in-from-top-1 duration-200 no-print">
+          <span className="text-xs font-bold text-red-650 dark:text-red-400 uppercase tracking-wider">
+            Báo cáo bị Sở Lao động - Thương binh và Xã hội từ chối
+          </span>
+          <span className="text-sm font-bold text-red-900 dark:text-red-300 leading-normal">
+            Lý do từ chối: {formData.rejectReason}
+          </span>
         </div>
       )}
 
@@ -2429,9 +2589,6 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                                 </h5>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                   {[
-                                    { label: "Tổng số vụ", name: "tongSoVu" },
-                                    { label: "Tổng số vụ có người chết", name: "soVuCoNguoiChet" },
-                                    { label: "Tổng số vụ có từ 2 người bị nạn trở lên", name: "soVuHaiNguoiTroLen" },
                                     { label: "Tổng số người bị nạn", name: "tongSoNguoiBiNan" },
                                     { label: "Tổng số lao động nữ bị nạn", name: "soLaoDongNuBiNan" },
                                     { label: "Tổng số người bị chết", name: "soNguoiChet" },
@@ -2708,20 +2865,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                   <>
                     <span className="text-zinc-500 dark:text-zinc-400">Báo cáo TNLĐ có dấu mộc công ty:</span>
                     {uploadedFileName ? (
-                      uploadedFileUrl ? (
-                        <a
-                          href={uploadedFileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 font-semibold ml-1.5 hover:underline cursor-pointer select-text"
-                        >
-                          {uploadedFileName}
-                        </a>
-                      ) : (
-                        <span className="text-blue-500 font-semibold ml-1.5 hover:underline cursor-pointer select-text">
-                          {uploadedFileName}
-                        </span>
-                      )
+                      <a
+                        href={`/department/dashboard/view-document?url=${encodeURIComponent(
+                          uploadedFileUrl && uploadedFileUrl !== "#" ? uploadedFileUrl : "/template.pdf"
+                        )}&name=${encodeURIComponent(uploadedFileName)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 font-semibold ml-1.5 hover:underline cursor-pointer select-text"
+                      >
+                        {uploadedFileName}
+                      </a>
                     ) : (
                       <span className="text-zinc-400 dark:text-zinc-500 font-medium italic ml-1.5">Không có tệp đính kèm</span>
                     )}
@@ -2745,20 +2898,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       className="hidden"
                     />
                     {uploadedFileName && (
-                      uploadedFileUrl ? (
-                        <a
-                          href={uploadedFileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text"
-                        >
-                          {uploadedFileName}
-                        </a>
-                      ) : (
-                        <span className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text">
-                          {uploadedFileName}
-                        </span>
-                      )
+                      <a
+                        href={`/department/dashboard/view-document?url=${encodeURIComponent(
+                          uploadedFileUrl && uploadedFileUrl !== "#" ? uploadedFileUrl : "/template.pdf"
+                        )}&name=${encodeURIComponent(uploadedFileName)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 font-semibold ml-4 hover:underline cursor-pointer select-text"
+                      >
+                        {uploadedFileName}
+                      </a>
                     )}
                   </>
                 )}
@@ -2843,109 +2992,133 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       </tr>
 
                       {/* Row 2: 1.1 Phân theo nguyên nhân xảy ra TNLĐ */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
-                        <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
-                          1.1 Phân theo nguyên nhân xảy ra TNLĐ
-                        </td>
-                      </tr>
-                      {/* Sub Category: a. Do người sử dụng lao động */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
-                        <td colSpan={13} className="p-2 text-left pl-6">
-                          a. Do người sử dụng lao động
-                        </td>
-                      </tr>
-                      {renderCauseRow(CAUSE_CATEGORIES[0], "1")}
-                      {renderCauseRow(CAUSE_CATEGORIES[1], "2")}
-                      {renderCauseRow(CAUSE_CATEGORIES[2], "3")}
-                      {renderCauseRow(CAUSE_CATEGORIES[3], "4")}
-                      {renderCauseRow(CAUSE_CATEGORIES[4], "5")}
-                      {renderCauseRow(CAUSE_CATEGORIES[5], "6")}
+                      {(hasVisibleCauseA || hasVisibleCauseB) && (
+                        <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
+                          <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
+                            1.1 Phân theo nguyên nhân xảy ra TNLĐ
+                          </td>
+                        </tr>
+                      )}
+                      {hasVisibleCauseA && (
+                        <>
+                          {/* Sub Category: a. Do người sử dụng lao động */}
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
+                            <td colSpan={13} className="p-2 text-left pl-6">
+                              a. Do người sử dụng lao động
+                            </td>
+                          </tr>
+                          {renderCauseRow(CAUSE_CATEGORIES[0], "1")}
+                          {renderCauseRow(CAUSE_CATEGORIES[1], "2")}
+                          {renderCauseRow(CAUSE_CATEGORIES[2], "3")}
+                          {renderCauseRow(CAUSE_CATEGORIES[3], "4")}
+                          {renderCauseRow(CAUSE_CATEGORIES[4], "5")}
+                          {renderCauseRow(CAUSE_CATEGORIES[5], "6")}
+                        </>
+                      )}
                       
-                      {/* Sub Category: b. Do người lao động */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
-                        <td colSpan={13} className="p-2 text-left pl-6">
-                          b. Do người lao động
-                        </td>
-                      </tr>
-                      {renderCauseRow(CAUSE_CATEGORIES[6], "7")}
-                      {renderCauseRow(CAUSE_CATEGORIES[7], "8")}
-                      {renderCauseRow(CAUSE_CATEGORIES[8], "9")}
+                      {hasVisibleCauseB && (
+                        <>
+                          {/* Sub Category: b. Do người lao động */}
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/10 dark:bg-zinc-900/2 font-bold text-zinc-500 text-[10px]">
+                            <td colSpan={13} className="p-2 text-left pl-6">
+                              b. Do người lao động
+                            </td>
+                          </tr>
+                          {renderCauseRow(CAUSE_CATEGORIES[6], "7")}
+                          {renderCauseRow(CAUSE_CATEGORIES[7], "8")}
+                          {renderCauseRow(CAUSE_CATEGORIES[8], "9")}
+                        </>
+                      )}
 
                       {/* Row 3: 1.2 Phân theo yếu tố gây chấn thương */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
-                        <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
-                          1.2 Phân theo yếu tố gây chấn thương
-                        </td>
-                      </tr>
-                      {FACTOR_CATEGORIES.map((factor, index) => {
-                        const code = getFactorCode(factor);
-                        return (
-                          <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{factor}</td>
-                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoVu")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuCoNguoiChet")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuHaiNguoiTroLen")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoNguoiBiNan")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiBiNanKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soLaoDongNuBiNan")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "laoDongNuBiNanKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChet")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChetKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiThuongNang")}</td>
-                            <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiThuongNangKhongQL")}</td>
+                      {hasVisibleFactors && (
+                        <>
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
+                            <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
+                              1.2 Phân theo yếu tố gây chấn thương
+                            </td>
                           </tr>
-                        );
-                      })}
+                          {FACTOR_CATEGORIES.map((factor, index) => {
+                            if (isFactorRowEmpty(factor)) return null;
+                            const code = getFactorCode(factor);
+                            return (
+                              <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{factor}</td>
+                                <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoVu")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuCoNguoiChet")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soVuHaiNguoiTroLen")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "tongSoNguoiBiNan")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiBiNanKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soLaoDongNuBiNan")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "laoDongNuBiNanKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChet")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiChetKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByFactor(factor, "soNguoiThuongNang")}</td>
+                                <td className="p-3 text-center">{sumBlocksByFactor(factor, "soNguoiThuongNangKhongQL")}</td>
+                              </tr>
+                            );
+                          })}
+                        </>
+                      )}
 
                       {/* Row 4: 1.3 Phân theo nghề nghiệp */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
-                        <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
-                          1.3 Phân theo nghề nghiệp
-                        </td>
-                      </tr>
-                      {JOB_CATEGORIES.map((job, index) => {
-                        const code = getJobCode(job);
-                        return (
-                          <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{job}</td>
-                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoVu")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuCoNguoiChet")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuHaiNguoiTroLen")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoNguoiBiNan")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiBiNanKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soLaoDongNuBiNan")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "laoDongNuBiNanKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChet")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChetKhongQL")}</td>
-                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiThuongNang")}</td>
-                            <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiThuongNangKhongQL")}</td>
+                      {hasVisibleJobs && (
+                        <>
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
+                            <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
+                              1.3 Phân theo nghề nghiệp
+                            </td>
                           </tr>
-                        );
-                      })}
+                          {JOB_CATEGORIES.map((job, index) => {
+                            if (isJobRowEmpty(job)) return null;
+                            const code = getJobCode(job);
+                            return (
+                              <tr key={code} className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                                <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800">{job}</td>
+                                <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">{code}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoVu")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuCoNguoiChet")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soVuHaiNguoiTroLen")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "tongSoNguoiBiNan")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiBiNanKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soLaoDongNuBiNan")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "laoDongNuBiNanKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChet")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiChetKhongQL")}</td>
+                                <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{sumBlocksByJob(job, "soNguoiThuongNang")}</td>
+                                <td className="p-3 text-center">{sumBlocksByJob(job, "soNguoiThuongNangKhongQL")}</td>
+                              </tr>
+                            );
+                          })}
+                        </>
+                      )}
 
                       {/* Row 5: 2. Tai nạn được hưởng trợ cấp theo Luật ATVSLĐ */}
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold text-zinc-900 dark:text-zinc-100">
-                        <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
-                          2. Tai nạn được hưởng trợ cấp theo quy định tại Khoản 2 Điều 39 Luật ATVSLĐ
-                        </td>
-                      </tr>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800"></td>
-                        <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">10</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoVu || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuCoNguoiChet || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuHaiNguoiTroLen || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoNguoiBiNan || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiBiNanKhongQL || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soLaoDongNuBiNan || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_laoDongNuBiNanKhongQL || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChet || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChetKhongQL || 0)}</td>
-                        <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiThuongNang || 0)}</td>
-                        <td className="p-3 text-center">{Number(formData.tc_soNguoiThuongNangKhongQL || 0)}</td>
-                      </tr>
+                      {!isSection2Empty && (
+                        <>
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold text-zinc-900 dark:text-zinc-100">
+                            <td colSpan={13} className="p-2.5 text-left text-zinc-800 dark:text-zinc-200">
+                              2. Tai nạn được hưởng trợ cấp theo quy định tại Khoản 2 Điều 39 Luật ATVSLĐ
+                            </td>
+                          </tr>
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            <td className="p-3 text-left pl-8 border-r border-zinc-200 dark:border-zinc-800"></td>
+                            <td className="p-3 text-center bg-zinc-50/50 dark:bg-zinc-900/10 font-bold border-r border-zinc-200 dark:border-zinc-800">10</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoVu || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuCoNguoiChet || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soVuHaiNguoiTroLen || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_tongSoNguoiBiNan || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiBiNanKhongQL || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soLaoDongNuBiNan || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_laoDongNuBiNanKhongQL || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChet || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiChetKhongQL || 0)}</td>
+                            <td className="p-3 text-center border-r border-zinc-200 dark:border-zinc-800">{Number(formData.tc_soNguoiThuongNang || 0)}</td>
+                            <td className="p-3 text-center">{Number(formData.tc_soNguoiThuongNangKhongQL || 0)}</td>
+                          </tr>
+                        </>
+                      )}
 
                       {/* Row 6: 3. Tổng số */}
                       <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/5 font-bold">
@@ -3011,7 +3184,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiYTe || "0"}</td>
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiLuong || "0"}</td>
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiBoiThuong || "0"}</td>
-                        <td className="p-3.5 text-center">{formData.thietHaiTaiSan || "0"}</td>
+                        <td className="p-3.5 text-center text-red-600 dark:text-red-400 font-bold">{formData.thietHaiTaiSan || "0"}</td>
                       </tr>
                     </tbody>
                   </table>

@@ -409,26 +409,11 @@ export const ReportPeriodManagement: React.FC<ReportPeriodManagementProps> = ({
 
     // Special validation rules for start date & deadline based on year and period
     if (!errors.year && formPeriodType && formStartDate && formEndDate) {
-      const y = Number(formYear);
-      if (formPeriodType === "SIX_MONTHS") {
-        const expectedStart = `${y}-07-01`;
-        const expectedEnd = `${y}-07-05`;
-        if (formStartDate !== expectedStart) {
-          errors.startDate = `Ngày bắt đầu phải là 01/07/${y} đối với kỳ 6 tháng`;
-        }
-        if (formEndDate !== expectedEnd) {
-          errors.endDate = `Hạn chót nộp báo cáo phải là trước ngày 05/07/${y} (chọn 05/07/${y})`;
-        }
-      } else if (formPeriodType === "FULL_YEAR") {
-        const nextY = y + 1;
-        const expectedStart = `${nextY}-01-01`;
-        const expectedEnd = `${nextY}-01-10`;
-        if (formStartDate !== expectedStart) {
-          errors.startDate = `Ngày bắt đầu phải là 01/01/${nextY} đối với kỳ cả năm`;
-        }
-        if (formEndDate !== expectedEnd) {
-          errors.endDate = `Hạn chót nộp báo cáo phải là trước ngày 10/01/${nextY} (chọn 10/01/${nextY})`;
-        }
+      const start = new Date(formStartDate);
+      const end = new Date(formEndDate);
+      if (end <= start) {
+        errors.startDate = "Ngày bắt đầu phải trước ngày kết thúc";
+        errors.endDate = "Ngày kết thúc phải sau ngày bắt đầu";
       }
     }
 
@@ -443,6 +428,28 @@ export const ReportPeriodManagement: React.FC<ReportPeriodManagementProps> = ({
 
     setIsLoading(true);
     try {
+      // Check duplicate using the API first to show inline error
+      const checkRes = await getReportPeriods({
+        year: formYear,
+        periodType: formPeriodType,
+        limit: 100,
+      });
+
+      if (checkRes.success && checkRes.data) {
+        const existingItems = checkRes.data.items || [];
+        const hasDuplicate = existingItems.some(
+          (p: any) => !editingPeriod || String(p.id) !== String(editingPeriod.id)
+        );
+        if (hasDuplicate) {
+          setFormErrors(prev => ({
+            ...prev,
+            periodType: `Kỳ báo cáo ${formPeriodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"} của năm ${formYear} đã tồn tại!`,
+          }));
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const payload = {
         reportName: formReportName,
         year: Number(formYear),

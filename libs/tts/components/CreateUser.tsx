@@ -478,8 +478,8 @@ export const CreateUser: React.FC<CreateUserProps> = ({ onSave, onCancel, showTo
                   isLoadingProvinces
                     ? "Đang tải danh sách..."
                     : provincesError
-                    ? "Không thể tải danh sách Tỉnh/Thành phố"
-                    : "Chọn tỉnh/ thành phố"
+                      ? "Không thể tải danh sách Tỉnh/Thành phố"
+                      : "Chọn tỉnh/ thành phố"
                 }
                 onChange={(val) => handleSelectChange("province", val)}
                 disabled={isLoadingProvinces || !!provincesError}
@@ -494,12 +494,12 @@ export const CreateUser: React.FC<CreateUserProps> = ({ onSave, onCancel, showTo
                   isLoadingWards
                     ? "Đang tải phường/ xã..."
                     : wardsError
-                    ? "Không thể tải danh sách Phường/Xã"
-                    : !formData.province
-                    ? "Vui lòng chọn Tỉnh/Thành phố trước"
-                    : wards.length === 0
-                    ? "Không có dữ liệu Phường/Xã"
-                    : "Chọn phường/ xã"
+                      ? "Không thể tải danh sách Phường/Xã"
+                      : !formData.province
+                        ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                        : wards.length === 0
+                          ? "Không có dữ liệu Phường/Xã"
+                          : "Chọn phường/ xã"
                 }
                 onChange={(val) => handleSelectChange("ward", val)}
                 disabled={!formData.province || isLoadingWards || !!wardsError || wards.length === 0}

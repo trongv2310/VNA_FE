@@ -2,34 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
+import { getIndustries } from "../services/api";
 
 export interface IndustryLevel4 {
   code: string;
   name: string;
 }
 
-export const MOCK_INDUSTRIES_LEVEL4: IndustryLevel4[] = [
-  { code: "0111", name: "Trồng lúa" },
-  { code: "0112", name: "Trồng ngô và cây lương thực có hạt khác" },
-  { code: "0113", name: "Trồng cây lấy củ có chất bột" },
-  { code: "0114", name: "Trồng cây mía" },
-  { code: "0115", name: "Trồng cây thuốc lá, thuốc lào" },
-  { code: "0116", name: "Trồng cây lấy sợi" },
-  { code: "0117", name: "Trồng cây có hạt chứa dầu" },
-  { code: "0118", name: "Trồng rau, đậu các loại và trồng hoa" },
-  { code: "0121", name: "Trồng cây ăn quả" },
-  { code: "0122", name: "Trồng cây lấy quả chứa dầu" },
-  { code: "0123", name: "Trồng cây điều" },
-  { code: "0124", name: "Trồng cây tiêu" },
-  { code: "0125", name: "Trồng cây cao su" },
-  { code: "0126", name: "Trồng cây cà phê" },
-  { code: "0127", name: "Trồng cây chè" },
-  { code: "0128", name: "Trồng cây gia vị, cây dược liệu" },
-  { code: "0129", name: "Trồng cây công nghiệp lâu năm khác" },
-  { code: "0141", name: "Chăn nuôi trâu, bò" },
-  { code: "0142", name: "Chăn nuôi ngựa, lừa, la" },
-  { code: "0144", name: "Chăn nuôi dê, cừu" },
-];
+export const MOCK_INDUSTRIES_LEVEL4: IndustryLevel4[] = [];
 
 interface IndustrySearchSelectProps {
   value: string;
@@ -46,8 +26,26 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [industries, setIndustries] = useState<IndustryLevel4[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const selectedIndustry = MOCK_INDUSTRIES_LEVEL4.find((ind) => ind.code === value);
+  useEffect(() => {
+    setIsLoading(true);
+    getIndustries()
+      .then((res) => {
+        if (res.success && res.data) {
+          setIndustries(res.data);
+        }
+      })
+      .catch((err) => {
+        console.error("Không thể tải danh sách ngành nghề", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const selectedIndustry = industries.find((ind) => ind.code === value);
   const displayValue = selectedIndustry ? `${selectedIndustry.code} - ${selectedIndustry.name}` : "";
 
   useEffect(() => {
@@ -56,7 +54,7 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
     }
   }, [isOpen]);
 
-  const filtered = MOCK_INDUSTRIES_LEVEL4.filter(
+  const filtered = industries.filter(
     (ind) =>
       ind.code.includes(searchTerm) ||
       ind.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -75,31 +73,28 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
         `}>
           Ngành nghề kinh doanh <span className="text-red-500">*</span>
         </label>
-        
+
         <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
           <input
             type="text"
             readOnly
             disabled={disabled}
-            className={`w-full bg-transparent border-0 outline-none text-sm font-semibold pr-8 transition-colors ${
-              disabled ? "cursor-not-allowed" : "cursor-pointer"
-            } ${
-              displayValue ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"
-            }`}
-            placeholder="Chọn ngành nghề kinh doanh"
-            value={displayValue || "Chọn ngành nghề kinh doanh"}
+            className={`w-full bg-transparent border-0 outline-none text-sm font-semibold pr-8 transition-colors ${disabled ? "cursor-not-allowed" : "cursor-pointer"
+              } ${displayValue ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"
+              }`}
+            placeholder={isLoading ? "Đang tải..." : "Chọn ngành nghề kinh doanh"}
+            value={displayValue || (isLoading ? "Đang tải..." : "Chọn ngành nghề kinh doanh")}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => {
-              if (!disabled) setIsOpen(true);
+              if (!disabled && !isLoading) setIsOpen(true);
             }}
             onClick={() => {
-              if (!disabled) setIsOpen(true);
+              if (!disabled && !isLoading) setIsOpen(true);
             }}
           />
           <ChevronDown
-            className={`absolute right-0 w-4.5 h-4.5 text-zinc-400 pointer-events-none transition-transform duration-200 ${
-              isOpen ? "rotate-180" : ""
-            }`}
+            className={`absolute right-0 w-4.5 h-4.5 text-zinc-400 pointer-events-none transition-transform duration-200 ${isOpen ? "rotate-180" : ""
+              }`}
           />
         </div>
       </div>
@@ -145,3 +140,4 @@ export const IndustrySearchSelect: React.FC<IndustrySearchSelectProps> = ({
     </div>
   );
 };
+

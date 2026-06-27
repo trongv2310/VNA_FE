@@ -1,4 +1,5 @@
 import type { UserData } from "../components/UserProfile";
+import { STATIC_BUSINESS_TYPES, STATIC_INDUSTRIES_LEVEL4 } from "./mockData";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
@@ -409,7 +410,7 @@ export async function updateUserAdmin(
   if (data.provinceCity !== undefined) formData.append("provinceCity", data.provinceCity);
   if (data.wardCommune !== undefined) formData.append("wardCommune", data.wardCommune);
   if (data.address !== undefined) formData.append("address", data.address);
-  
+
   if (data.avatar?.startsWith("data:")) {
     const file = dataURLtoFile(data.avatar, "avatar.png");
     if (file) {
@@ -442,7 +443,7 @@ export async function createUser(
   if (data.provinceCity !== undefined) formData.append("provinceCity", data.provinceCity);
   if (data.wardCommune !== undefined) formData.append("wardCommune", data.wardCommune);
   if (data.address !== undefined) formData.append("address", data.address);
-  
+
   if (data.avatar?.startsWith("data:")) {
     const file = dataURLtoFile(data.avatar, "avatar.png");
     if (file) {
@@ -623,12 +624,36 @@ export async function getBusinesses(query?: {
   });
 }
 
-export async function getBusinessOptions() {
-  return request<BusinessOptionsResponse>("/businesses/options", {
-    method: "GET",
-    headers: authHeaders(),
-  });
+export async function getBusinessOptions(): Promise<ApiResponse<BusinessOptionsResponse>> {
+  return {
+    success: true,
+    statusCode: 200,
+    message: "Lấy danh mục doanh nghiệp thành công",
+    data: {
+      businessTypes: [...STATIC_BUSINESS_TYPES],
+      taxCodeRules: {
+        format: "10 digits or 10 digits-3 digits",
+        examples: ["9100008882", "0100109106-001"],
+      },
+      industryLevel: 4,
+      industryCodeRule: "Mã ngành nghề cấp 4 gồm 4 chữ số theo VSIC",
+    },
+    timestamp: new Date().toISOString(),
+    path: "/businesses/options",
+  };
 }
+
+export async function getIndustries(): Promise<ApiResponse<Array<{ code: string; name: string }>>> {
+  return {
+    success: true,
+    statusCode: 200,
+    message: "Lấy danh sách ngành nghề thành công",
+    data: [...STATIC_INDUSTRIES_LEVEL4],
+    timestamp: new Date().toISOString(),
+    path: "/businesses/industries",
+  };
+}
+
 
 export async function getBusinessDetail(id: number | string) {
   return request<BusinessListItem>(`/businesses/${id}`, {
@@ -678,10 +703,17 @@ export async function deleteBusinessAttachment(businessId: number | string, atta
   });
 }
 
-export async function getRegistrationOptions() {
-  return request<{ businessTypes: string[] }>("/businesses/register/options", {
-    method: "GET",
-  });
+export async function getRegistrationOptions(): Promise<ApiResponse<{ businessTypes: string[] }>> {
+  return {
+    success: true,
+    statusCode: 200,
+    message: "Thành công",
+    data: {
+      businessTypes: [...STATIC_BUSINESS_TYPES],
+    },
+    timestamp: new Date().toISOString(),
+    path: "/businesses/register/options",
+  };
 }
 
 export async function sendRegistrationOtp(body: { email: string }) {
@@ -748,6 +780,44 @@ export interface ListDepartmentReportsQuery {
   wardCommune?: string;
 }
 
+function getCatalogName(type: string, id: number): string {
+  let categories: string[] = [];
+  if (type === "ACCIDENT_CAUSE") {
+    categories = [
+      "Không có thiết bị an toàn hoặc thiết bị không đảm bảo an toàn",
+      "Không có phương tiện bảo vệ cá nhân hoặc phương tiện bảo vệ cá nhân không tốt",
+      "Tổ chức lao động không hợp lý",
+      "Chưa huấn luyện hoặc huấn luyện an toàn vệ sinh lao động chưa đầy đủ",
+      "Không có quy trình an toàn hoặc biện pháp làm việc an toàn",
+      "Điều kiện làm việc không tốt",
+      "Vi phạm nội quy, quy trình, biện pháp làm việc an toàn",
+      "Không sử dụng phương tiện bảo vệ cá nhân",
+      "Khách quan khó tránh/ Nguyên nhân chưa kể đến"
+    ];
+  } else if (type === "INJURY_FACTOR") {
+    categories = [
+      "Thiết bị nâng",
+      "Máy gia công cắt gọt kim loại, gỗ",
+      "Điện giật",
+      "Ngã từ trên cao",
+      "Vật rơi, vật văng bắn",
+      "Nhiệt độ cao, bỏng lửa",
+      "Khác"
+    ];
+  } else if (type === "OCCUPATION") {
+    categories = [
+      "Nhà lãnh đạo cơ quan Đảng Cộng sản Việt nam cấp Trung ương",
+      "Công nhân",
+      "Nhà quản lý, điều hành doanh nghiệp",
+      "Kỹ sư, kỹ thuật viên chuyên nghiệp",
+      "Thợ vận hành máy và thiết bị",
+      "Lao động thủ công giản đơn",
+      "Khác"
+    ];
+  }
+  return categories[id - 1] || "";
+}
+
 export async function getDepartmentReports(query?: ListDepartmentReportsQuery) {
   const params = new URLSearchParams();
   if (query) {
@@ -758,8 +828,7 @@ export async function getDepartmentReports(query?: ListDepartmentReportsQuery) {
     });
   }
   const queryString = params.toString();
-  const path = `/labor-accident-reports/admin${queryString ? `?${queryString}` : ""}`;
-  return request<any>(path, {
+  return request<any>(`/labor-accident-reports/admin${queryString ? `?${queryString}` : ""}`, {
     method: "GET",
     headers: authHeaders(),
   });
@@ -769,6 +838,22 @@ export async function receiveDepartmentReport(id: number | string) {
   return request<any>(`/labor-accident-reports/admin/${id}/receive`, {
     method: "POST",
     headers: authHeaders(),
+  });
+}
+
+export async function bulkReceiveDepartmentReports(ids: number[]) {
+  return request<any>(`/labor-accident-reports/admin/bulk-receive`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export async function bulkRejectDepartmentReports(ids: number[], rejectReason: string) {
+  return request<any>(`/labor-accident-reports/admin/bulk-reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ids, rejectReason }),
   });
 }
 
@@ -788,26 +873,17 @@ export async function getMyLaborAccidentReports(query?: {
     });
   }
   const queryString = params.toString();
-  const path = `/labor-accident-reports/my${queryString ? `?${queryString}` : ""}`;
-  return request<any>(path, {
+  return request<any>(`/labor-accident-reports/my${queryString ? `?${queryString}` : ""}`, {
     method: "GET",
     headers: authHeaders(),
   });
 }
 
 export async function getMyLaborAccidentReportDetail(id: number | string) {
-  try {
-    return await request<any>(`/labor-accident-reports/my/${id}`, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-  } catch (err: any) {
-    return {
-      success: false,
-      message: err.message || "Không tìm thấy báo cáo tai nạn lao động",
-      data: null,
-    };
-  }
+  return request<any>(`/labor-accident-reports/my/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function saveLaborAccidentReportDraft(body: FormData) {
@@ -827,26 +903,18 @@ export async function submitLaborAccidentReport(id: number | string, body: FormD
 }
 
 export async function getCatalogOptions(type?: string) {
-  const path = `/labor-accident-catalogs/options${type ? `?type=${type}` : ""}`;
-  return request<any>(path, {
+  const query = type ? `?type=${type}` : "";
+  return request<any>(`/labor-accident-catalogs/options${query}`, {
     method: "GET",
     headers: authHeaders(),
   });
 }
 
 export async function getDepartmentReportDetail(id: number | string) {
-  try {
-    return await request<any>(`/labor-accident-reports/admin/${id}`, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-  } catch (err: any) {
-    return {
-      success: false,
-      message: err.message || "Không tìm thấy báo cáo tai nạn lao động",
-      data: null,
-    };
-  }
+  return request<any>(`/labor-accident-reports/admin/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function getReportPeriods(query?: {
@@ -868,8 +936,7 @@ export async function getReportPeriods(query?: {
     });
   }
   const queryString = params.toString();
-  const path = `/labor-accident-report-periods${queryString ? `?${queryString}` : ""}`;
-  return request<any>(path, {
+  return request<any>(`/labor-accident-report-periods${queryString ? `?${queryString}` : ""}`, {
     method: "GET",
     headers: authHeaders(),
   });
@@ -912,5 +979,6 @@ export async function updateReportPeriodStatus(id: number | string, isActive: bo
     body: JSON.stringify({ isActive }),
   });
 }
+
 
 

@@ -27,6 +27,7 @@ import {
   sendBusinessProfileEmailOtp,
   verifyBusinessProfileEmailOtp,
   updateMyBusinessProfile,
+  getAccessToken,
 } from "../services/api";
 import { IndustrySearchSelect } from "./IndustrySearchSelect";
 import { SearchSelect } from "./SearchSelect";
@@ -82,18 +83,24 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
   const [isSavingNewEmail, setIsSavingNewEmail] = useState(false);
 
   useEffect(() => {
-    if ((isRegistration || isProfileEdit) && (!types || types.length === 0)) {
-      getRegistrationOptions()
-        .then((res) => {
+    if (!types || types.length === 0) {
+      const fetchOptions = async () => {
+        try {
+          const isTokenPresent = getAccessToken();
+          const res = isTokenPresent
+            ? await getBusinessOptions()
+            : await getRegistrationOptions();
+          
           if (res.success && res.data?.businessTypes) {
             setTypes(res.data.businessTypes);
           }
-        })
-        .catch((err) => {
+        } catch (err) {
           showToast(err instanceof Error ? err.message : "Không thể tải danh sách loại hình doanh nghiệp", "error");
-        });
+        }
+      };
+      fetchOptions();
     }
-  }, [isRegistration, isProfileEdit]);
+  }, [types]);
 
   useEffect(() => {
     if (businessTypes && businessTypes.length > 0) {
@@ -786,17 +793,17 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-8">
+    <div className="flex flex-col gap-6">
       {/* Top Banner Header */}
       <div className="flex items-center justify-between border-t-4 border-emerald-600 bg-white dark:bg-zinc-950 rounded-2xl p-4 shadow-sm border border-zinc-200/60 dark:border-zinc-800/80">
         <h2 className="text-lg font-bold text-zinc-800 dark:text-zinc-50 select-none">
-          {isRegistration 
-            ? "Đăng ký tài khoản doanh nghiệp" 
-            : mode === "view" 
-            ? "Chi tiết doanh nghiệp" 
-            : mode === "edit" 
-            ? "Chỉnh sửa doanh nghiệp" 
-            : "Thêm mới doanh nghiệp"}
+          {isRegistration
+            ? "Đăng ký tài khoản doanh nghiệp"
+            : mode === "view"
+              ? "Chi tiết doanh nghiệp"
+              : mode === "edit"
+                ? "Chỉnh sửa doanh nghiệp"
+                : "Thêm mới doanh nghiệp"}
         </h2>
       </div>
 
@@ -815,14 +822,12 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
           <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-              step === 2 ? "bg-blue-600 text-white" : "bg-slate-400 dark:bg-zinc-800 text-white"
-            }`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? "bg-blue-600 text-white" : "bg-slate-400 dark:bg-zinc-800 text-white"
+              }`}>
               2
             </div>
-            <span className={`text-xs font-bold ${
-              step === 2 ? "text-zinc-800 dark:text-zinc-200" : "text-slate-400 dark:text-zinc-500"
-            }`}>
+            <span className={`text-xs font-bold ${step === 2 ? "text-zinc-800 dark:text-zinc-200" : "text-slate-400 dark:text-zinc-500"
+              }`}>
               {isRegistration ? "Xác nhận thông tin" : "Xác nhận đăng ký"}
             </span>
           </div>
@@ -844,438 +849,441 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
             className="hidden"
           />
 
-          {/* Section 1: Thông tin doanh nghiệp */}
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-5">
-            <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
-              Thông tin doanh nghiệp
-            </h3>
+          <div className="flex-1 overflow-y-auto max-h-[60vh] lg:max-h-[calc(100vh-340px)] pr-2 -mr-2 flex flex-col gap-6 pb-2">
+            {/* Section 1: Thông tin doanh nghiệp */}
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-5">
+              <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
+                Thông tin doanh nghiệp
+              </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {/* Tên doanh nghiệp */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.businessName ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.businessName ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Tên doanh nghiệp <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="businessName"
-                  value={formData.businessName}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập tên doanh nghiệp"}
-                />
-              </div>
-
-              {/* Mã số thuế */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.taxCode ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${(mode === "edit" || isReadOnly || isProfileEdit) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.taxCode ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Mã số thuế <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="taxCode"
-                  value={formData.taxCode}
-                  onChange={handleInputChange}
-                  disabled={mode === "edit" || isReadOnly || isProfileEdit}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập mã số thuế"}
-                />
-              </div>
-
-              {/* Loại hình kinh doanh */}
-              <SearchSelect
-                label="Loại hình kinh doanh"
-                value={formData.businessType}
-                options={types.map((t) => ({ value: t, label: t }))}
-                placeholder="Chọn loại hình"
-                onChange={(val) => handleSelectChange("businessType", val)}
-                error={!!errors.businessType}
-                required
-                disabled={isReadOnly}
-              />
-
-              {/* Ngành nghề kinh doanh chính */}
-              <div className="w-full">
-                <IndustrySearchSelect
-                  value={formData.industryCode}
-                  error={!!errors.industryCode}
-                  disabled={isReadOnly}
-                  onChange={(code: string, name: string) => {
-                    setFormData((prev) => ({ ...prev, industryCode: code, industryName: name }));
-                    if (errors.industryCode) {
-                      setErrors((prev) => {
-                        const next = { ...prev };
-                        delete next.industryCode;
-                        return next;
-                      });
-                    }
-                  }}
-                />
-              </div>
-
-              {/* Ngày cấp GPKD */}
-              <div
-                onClick={handleDateClick}
-                className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.licenseIssueDate ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                  } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : "cursor-pointer"}`}
-              >
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold pointer-events-none ${errors.licenseIssueDate ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Ngày cấp GPKD <span className="text-red-500">*</span>
-                </label>
-                <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
-                  <input
-                    ref={dateInputRef}
-                    type="date"
-                    name="licenseIssueDate"
-                    value={formData.licenseIssueDate}
-                    onChange={handleInputChange}
-                    disabled={isReadOnly}
-                    className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold focus:ring-0 ${isReadOnly ? "cursor-not-allowed" : "cursor-pointer"}`}
-                  />
-                  <Calendar className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Tỉnh/Thành phố ĐKKD */}
-              <SearchSelect
-                label="Tỉnh/Thành phố ĐKKD"
-                value={formData.provinceCity}
-                options={registeredAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
-                placeholder={
-                  registeredAddress.isLoadingProvinces
-                    ? "Đang tải danh sách..."
-                    : registeredAddress.provincesError
-                    ? "Không thể tải danh sách Tỉnh/Thành phố"
-                    : "Chọn Tỉnh/Thành phố"
-                }
-                onChange={(val) => handleSelectChange("provinceCity", val)}
-                error={!!errors.provinceCity}
-                required
-                disabled={isReadOnly || registeredAddress.isLoadingProvinces || !!registeredAddress.provincesError}
-              />
-
-              {/* Phường/Xã ĐKKD */}
-              <SearchSelect
-                label="Phường/Xã ĐKKD"
-                value={formData.wardCommune}
-                options={registeredAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
-                placeholder={
-                  registeredAddress.isLoadingWards
-                    ? "Đang tải phường/xã..."
-                    : registeredAddress.wardsError
-                    ? "Không thể tải danh sách Phường/Xã"
-                    : !formData.provinceCity
-                    ? "Vui lòng chọn Tỉnh/Thành phố trước"
-                    : registeredAddress.wards.length === 0
-                    ? "Không có dữ liệu Phường/Xã"
-                    : "Chọn phường/xã"
-                }
-                onChange={(val) => handleSelectChange("wardCommune", val)}
-                error={!!errors.wardCommune}
-                required
-                disabled={
-                  !formData.provinceCity ||
-                  isReadOnly ||
-                  registeredAddress.isLoadingWards ||
-                  !!registeredAddress.wardsError ||
-                  registeredAddress.wards.length === 0
-                }
-              />
-
-              {/* Địa chỉ đăng ký */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 md:col-span-2 xl:col-span-2 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Địa chỉ
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập địa chỉ trụ sở đăng ký"}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Thông tin liên hệ */}
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-5">
-            <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
-              Thông tin liên hệ
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {/* Tên tiếng nước ngoài */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Tên viết bằng tiếng nước ngoài
-                </label>
-                <input
-                  type="text"
-                  name="foreignName"
-                  value={formData.foreignName}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập tên viết bằng tiếng nước ngoài"}
-                />
-              </div>
-
-              {/* Email */}
-              <div className={`relative border rounded-xl px-4 py-2 flex items-center justify-between focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.email ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${(isReadOnly || isProfileEdit) ? "bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <div className="flex-1 flex flex-col justify-center min-w-0">
-                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.email ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {/* Tên doanh nghiệp */}
+                <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.businessName ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                  } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.businessName ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
                     }`}>
-                    Email <span className="text-red-500">*</span>
+                    Tên doanh nghiệp <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
+                    type="text"
+                    name="businessName"
+                    value={formData.businessName}
                     onChange={handleInputChange}
-                    disabled={isReadOnly || isProfileEdit}
+                    disabled={isReadOnly}
                     className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                    placeholder={isReadOnly ? "" : "vna@gmail.com"}
+                    placeholder={isReadOnly ? "" : "Nhập tên doanh nghiệp"}
                   />
                 </div>
-                {isProfileEdit && !isReadOnly && (
-                  <button
-                    type="button"
-                    onClick={handleStartEmailChange}
-                    className="text-blue-600 hover:text-blue-700 text-xs font-bold transition-colors cursor-pointer select-none pl-2 flex-shrink-0"
-                  >
-                    Thay đổi
-                  </button>
-                )}
-              </div>
 
-              {/* Số điện thoại cơ quan */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.agencyPhone ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.agencyPhone ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  Số điện thoại cơ quan
-                </label>
-                <input
-                  type="text"
-                  name="agencyPhone"
-                  value={formData.agencyPhone}
-                  onChange={handleInputChange}
+                {/* Mã số thuế */}
+                <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.taxCode ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                  } ${(mode === "edit" || isReadOnly || isProfileEdit) ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.taxCode ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                    }`}>
+                    Mã số thuế <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="taxCode"
+                    value={formData.taxCode}
+                    onChange={handleInputChange}
+                    disabled={mode === "edit" || isReadOnly || isProfileEdit}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập mã số thuế"}
+                  />
+                </div>
+
+                {/* Loại hình kinh doanh */}
+                <SearchSelect
+                  label="Loại hình kinh doanh"
+                  value={formData.businessType}
+                  options={types.map((t) => ({ value: t, label: t }))}
+                  placeholder="Chọn loại hình"
+                  onChange={(val) => handleSelectChange("businessType", val)}
+                  error={!!errors.businessType}
+                  required
                   disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập số điện thoại cơ quan"}
                 />
-              </div>
 
-              {/* Tỉnh/TP hoạt động KD */}
-              <SearchSelect
-                label="Tỉnh/TP hoạt động KD"
-                value={formData.operatingProvinceCity}
-                options={operatingAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
-                placeholder={
-                  operatingAddress.isLoadingProvinces
-                    ? "Đang tải danh sách..."
-                    : operatingAddress.provincesError
-                    ? "Không thể tải danh sách Tỉnh/Thành phố"
-                    : "Chọn Tỉnh/Thành phố"
-                }
-                onChange={(val) => handleSelectChange("operatingProvinceCity", val)}
-                disabled={isReadOnly || operatingAddress.isLoadingProvinces || !!operatingAddress.provincesError}
-              />
+                {/* Ngành nghề kinh doanh chính */}
+                <div className="w-full">
+                  <IndustrySearchSelect
+                    value={formData.industryCode}
+                    error={!!errors.industryCode}
+                    disabled={isReadOnly}
+                    onChange={(code: string, name: string) => {
+                      setFormData((prev) => ({ ...prev, industryCode: code, industryName: name }));
+                      if (errors.industryCode) {
+                        setErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.industryCode;
+                          return next;
+                        });
+                      }
+                    }}
+                  />
+                </div>
 
-              {/* Phường/Xã hoạt động KD */}
-              <SearchSelect
-                label="Phường/xã hoạt động KD"
-                value={formData.operatingWardCommune}
-                options={operatingAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
-                placeholder={
-                  operatingAddress.isLoadingWards
-                    ? "Đang tải phường/xã..."
-                    : operatingAddress.wardsError
-                    ? "Không thể tải danh sách Phường/Xã"
-                    : !formData.operatingProvinceCity
-                    ? "Vui lòng chọn Tỉnh/Thành phố trước"
-                    : operatingAddress.wards.length === 0
-                    ? "Không có dữ liệu Phường/Xã"
-                    : "Chọn phường/xã"
-                }
-                onChange={(val) => handleSelectChange("operatingWardCommune", val)}
-                disabled={
-                  !formData.operatingProvinceCity ||
-                  isReadOnly ||
-                  operatingAddress.isLoadingWards ||
-                  !!operatingAddress.wardsError ||
-                  operatingAddress.wards.length === 0
-                }
-              />
+                {/* Ngày cấp GPKD */}
+                <div
+                  onClick={handleDateClick}
+                  className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.licenseIssueDate ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                    } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : "cursor-pointer"}`}
+                >
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold pointer-events-none ${errors.licenseIssueDate ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                    }`}>
+                    Ngày cấp GPKD <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative flex items-center justify-between w-full pt-2 pb-0.5">
+                    <input
+                      ref={dateInputRef}
+                      type="date"
+                      name="licenseIssueDate"
+                      value={formData.licenseIssueDate}
+                      onChange={handleInputChange}
+                      disabled={isReadOnly}
+                      className={`w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold focus:ring-0 ${isReadOnly ? "cursor-not-allowed" : "cursor-pointer"}`}
+                    />
+                    <Calendar className="absolute right-0 w-4 h-4 text-zinc-400 pointer-events-none" />
+                  </div>
+                </div>
 
-              {/* Địa điểm kinh doanh */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Địa điểm kinh doanh
-                </label>
-                <input
-                  type="text"
-                  name="businessLocation"
-                  value={formData.businessLocation}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập địa điểm hoạt động kinh doanh"}
+                {/* Tỉnh/Thành phố ĐKKD */}
+                <SearchSelect
+                  label="Tỉnh/Thành phố ĐKKD"
+                  value={formData.provinceCity}
+                  options={registeredAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
+                  placeholder={
+                    registeredAddress.isLoadingProvinces
+                      ? "Đang tải danh sách..."
+                      : registeredAddress.provincesError
+                        ? "Không thể tải danh sách Tỉnh/Thành phố"
+                        : "Chọn Tỉnh/Thành phố"
+                  }
+                  onChange={(val) => handleSelectChange("provinceCity", val)}
+                  error={!!errors.provinceCity}
+                  required
+                  disabled={isReadOnly || registeredAddress.isLoadingProvinces || !!registeredAddress.provincesError}
                 />
-              </div>
 
-              {/* Người đứng đầu doanh nghiệp */}
-              <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
-                  Người đứng đầu doanh nghiệp
-                </label>
-                <input
-                  type="text"
-                  name="representativeName"
-                  value={formData.representativeName}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập tên người đứng đầu"}
+                {/* Phường/Xã ĐKKD */}
+                <SearchSelect
+                  label="Phường/Xã ĐKKD"
+                  value={formData.wardCommune}
+                  options={registeredAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
+                  placeholder={
+                    registeredAddress.isLoadingWards
+                      ? "Đang tải phường/xã..."
+                      : registeredAddress.wardsError
+                        ? "Không thể tải danh sách Phường/Xã"
+                        : !formData.provinceCity
+                          ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                          : registeredAddress.wards.length === 0
+                            ? "Không có dữ liệu Phường/Xã"
+                            : "Chọn phường/xã"
+                  }
+                  onChange={(val) => handleSelectChange("wardCommune", val)}
+                  error={!!errors.wardCommune}
+                  required
+                  disabled={
+                    !formData.provinceCity ||
+                    isReadOnly ||
+                    registeredAddress.isLoadingWards ||
+                    !!registeredAddress.wardsError ||
+                    registeredAddress.wards.length === 0
+                  }
                 />
-              </div>
 
-              {/* SĐT liên hệ người đứng đầu */}
-              <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.representativePhone ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-                } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
-                <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.representativePhone ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
-                  }`}>
-                  SĐT liên hệ người đứng đầu
-                </label>
-                <input
-                  type="text"
-                  name="representativePhone"
-                  value={formData.representativePhone}
-                  onChange={handleInputChange}
-                  disabled={isReadOnly}
-                  className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
-                  placeholder={isReadOnly ? "" : "Nhập số điện thoại"}
-                />
+                {/* Địa chỉ đăng ký */}
+                <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 md:col-span-2 xl:col-span-2 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
+                    Địa chỉ
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập địa chỉ trụ sở đăng ký"}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Section 3: File đính kèm */}
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
-            <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
-              File đính kèm
-            </h3>
+            {/* Section 2: Thông tin liên hệ */}
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-5">
+              <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
+                Thông tin liên hệ
+              </h3>
 
-            <div className="overflow-x-auto border border-zinc-150 dark:border-zinc-850 rounded-xl">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-zinc-50/50 dark:bg-zinc-900/10 border-b border-zinc-150 dark:border-zinc-800 select-none text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
-                    <th className="p-3.5">Tên file</th>
-                    <th className="p-3.5">Thông tin file</th>
-                    <th className="p-3.5 w-32 text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* GPKD File Row */}
-                  <tr className="border-b border-zinc-100 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-350">
-                    <td className="p-3.5 font-bold">Giấy phép kinh doanh</td>
-                    <td className="p-3.5 font-mono text-zinc-500">
-                      {attachments.gpkd.name || "Chưa tải lên file"}
-                    </td>
-                    <td className="p-3.5">
-                      <div className="flex items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handlePreviewClick("gpkd")}
-                          disabled={!attachments.gpkd.file && !attachments.gpkd.url}
-                          className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                          title="Xem file"
-                        >
-                          <Eye className="w-4.5 h-4.5" />
-                        </button>
-                        {mode !== "view" && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleUploadClick("gpkd")}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-blue-600 cursor-pointer transition-all"
-                              title="Tải lên file"
-                            >
-                              <Upload className="w-4.5 h-4.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handleDeleteAttachment("gpkd")}
-                              disabled={!attachments.gpkd.file && !attachments.gpkd.url}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                              title="Xóa file"
-                            >
-                              <Trash2 className="w-4.5 h-4.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {/* Tên tiếng nước ngoài */}
+                <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
+                    Tên viết bằng tiếng nước ngoài
+                  </label>
+                  <input
+                    type="text"
+                    name="foreignName"
+                    value={formData.foreignName}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập tên viết bằng tiếng nước ngoài"}
+                  />
+                </div>
 
-                  {/* GTK File Row */}
-                  <tr className="text-xs font-semibold text-zinc-700 dark:text-zinc-350">
-                    <td className="p-3.5 font-bold">Giấy tờ khác</td>
-                    <td className="p-3.5 font-mono text-zinc-500">
-                      {attachments.gtk.name || "Chưa tải lên file"}
-                    </td>
-                    <td className="p-3.5">
-                      <div className="flex items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => (attachments.gtk.file || attachments.gtk.url) && handlePreviewClick("gtk")}
-                          disabled={!attachments.gtk.file && !attachments.gtk.url}
-                          className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                          title="Xem file"
-                        >
-                          <Eye className="w-4.5 h-4.5" />
-                        </button>
-                        {mode !== "view" && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleUploadClick("gtk")}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-blue-600 cursor-pointer transition-all"
-                              title="Tải lên file"
-                            >
-                              <Upload className="w-4.5 h-4.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => (attachments.gtk.file || attachments.gtk.url) && handleDeleteAttachment("gtk")}
-                              disabled={!attachments.gtk.file && !attachments.gtk.url}
-                              className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                              title="Xóa file"
-                            >
-                              <Trash2 className="w-4.5 h-4.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                {/* Email */}
+                <div className={`relative border rounded-xl px-4 py-2 flex items-center justify-between focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.email ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                  } ${(isReadOnly || isProfileEdit) ? "bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.email ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                      }`}>
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      disabled={isReadOnly || isProfileEdit}
+                      className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                      placeholder={isReadOnly ? "" : "vna@gmail.com"}
+                    />
+                  </div>
+                  {isProfileEdit && !isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={handleStartEmailChange}
+                      className="text-blue-600 hover:text-blue-700 text-xs font-bold transition-colors cursor-pointer select-none pl-2 flex-shrink-0"
+                    >
+                      Thay đổi
+                    </button>
+                  )}
+                </div>
+
+                {/* Số điện thoại cơ quan */}
+                <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.agencyPhone ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                  } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.agencyPhone ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                    }`}>
+                    Số điện thoại cơ quan
+                  </label>
+                  <input
+                    type="text"
+                    name="agencyPhone"
+                    value={formData.agencyPhone}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập số điện thoại cơ quan"}
+                  />
+                </div>
+
+                {/* Tỉnh/TP hoạt động KD */}
+                <SearchSelect
+                  label="Tỉnh/TP hoạt động KD"
+                  value={formData.operatingProvinceCity}
+                  options={operatingAddress.provinces.map((p) => ({ value: p.name, label: p.name }))}
+                  placeholder={
+                    operatingAddress.isLoadingProvinces
+                      ? "Đang tải danh sách..."
+                      : operatingAddress.provincesError
+                        ? "Không thể tải danh sách Tỉnh/Thành phố"
+                        : "Chọn Tỉnh/Thành phố"
+                  }
+                  onChange={(val) => handleSelectChange("operatingProvinceCity", val)}
+                  disabled={isReadOnly || operatingAddress.isLoadingProvinces || !!operatingAddress.provincesError}
+                />
+
+                {/* Phường/Xã hoạt động KD */}
+                <SearchSelect
+                  label="Phường/xã hoạt động KD"
+                  value={formData.operatingWardCommune}
+                  options={operatingAddress.wards.map((w) => ({ value: w.name, label: w.name }))}
+                  placeholder={
+                    operatingAddress.isLoadingWards
+                      ? "Đang tải phường/xã..."
+                      : operatingAddress.wardsError
+                        ? "Không thể tải danh sách Phường/Xã"
+                        : !formData.operatingProvinceCity
+                          ? "Vui lòng chọn Tỉnh/Thành phố trước"
+                          : operatingAddress.wards.length === 0
+                            ? "Không có dữ liệu Phường/Xã"
+                            : "Chọn phường/xã"
+                  }
+                  onChange={(val) => handleSelectChange("operatingWardCommune", val)}
+                  disabled={
+                    !formData.operatingProvinceCity ||
+                    isReadOnly ||
+                    operatingAddress.isLoadingWards ||
+                    !!operatingAddress.wardsError ||
+                    operatingAddress.wards.length === 0
+                  }
+                />
+
+                {/* Địa điểm kinh doanh */}
+                <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
+                    Địa điểm kinh doanh
+                  </label>
+                  <input
+                    type="text"
+                    name="businessLocation"
+                    value={formData.businessLocation}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập địa điểm hoạt động kinh doanh"}
+                  />
+                </div>
+
+                {/* Người đứng đầu doanh nghiệp */}
+                <div className={`relative border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className="absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 font-bold">
+                    Người đứng đầu doanh nghiệp
+                  </label>
+                  <input
+                    type="text"
+                    name="representativeName"
+                    value={formData.representativeName}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập tên người đứng đầu"}
+                  />
+                </div>
+
+                {/* SĐT liên hệ người đứng đầu */}
+                <div className={`relative border rounded-xl px-4 py-2 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${errors.representativePhone ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
+                  } ${isReadOnly ? "opacity-60 cursor-not-allowed bg-zinc-50 dark:bg-zinc-900/40" : ""}`}>
+                  <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${errors.representativePhone ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                    }`}>
+                    SĐT liên hệ người đứng đầu
+                  </label>
+                  <input
+                    type="text"
+                    name="representativePhone"
+                    value={formData.representativePhone}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                    className="w-full bg-transparent border-0 outline-none text-zinc-800 dark:text-zinc-200 text-sm font-semibold pt-2 pb-0.5 font-mono disabled:cursor-not-allowed"
+                    placeholder={isReadOnly ? "" : "Nhập số điện thoại"}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: File đính kèm */}
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
+                File đính kèm
+              </h3>
+
+              <div className="overflow-x-auto border border-zinc-150 dark:border-zinc-850 rounded-xl">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-zinc-50/50 dark:bg-zinc-900/10 border-b border-zinc-150 dark:border-zinc-800 select-none text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                      <th className="p-3.5">Tên file</th>
+                      <th className="p-3.5">Thông tin file</th>
+                      <th className="p-3.5 w-32 text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* GPKD File Row */}
+                    <tr className="border-b border-zinc-100 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-350">
+                      <td className="p-3.5 font-bold">Giấy phép kinh doanh</td>
+                      <td className="p-3.5 font-mono text-zinc-500">
+                        {attachments.gpkd.name || "Chưa tải lên file"}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handlePreviewClick("gpkd")}
+                            disabled={!attachments.gpkd.file && !attachments.gpkd.url}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                            title="Xem file"
+                          >
+                            <Eye className="w-4.5 h-4.5" />
+                          </button>
+                          {mode !== "view" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUploadClick("gpkd")}
+                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-blue-600 cursor-pointer transition-all"
+                                title="Tải lên file"
+                              >
+                                <Upload className="w-4.5 h-4.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handleDeleteAttachment("gpkd")}
+                                disabled={!attachments.gpkd.file && !attachments.gpkd.url}
+                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                                title="Xóa file"
+                              >
+                                <Trash2 className="w-4.5 h-4.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* GTK File Row */}
+                    <tr className="text-xs font-semibold text-zinc-700 dark:text-zinc-350">
+                      <td className="p-3.5 font-bold">Giấy tờ khác</td>
+                      <td className="p-3.5 font-mono text-zinc-500">
+                        {attachments.gtk.name || "Chưa tải lên file"}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => (attachments.gtk.file || attachments.gtk.url) && handlePreviewClick("gtk")}
+                            disabled={!attachments.gtk.file && !attachments.gtk.url}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                            title="Xem file"
+                          >
+                            <Eye className="w-4.5 h-4.5" />
+                          </button>
+                          {mode !== "view" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleUploadClick("gtk")}
+                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-blue-600 cursor-pointer transition-all"
+                                title="Tải lên file"
+                              >
+                                <Upload className="w-4.5 h-4.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => (attachments.gtk.file || attachments.gtk.url) && handleDeleteAttachment("gtk")}
+                                disabled={!attachments.gtk.file && !attachments.gtk.url}
+                                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                                title="Xóa file"
+                              >
+                                <Trash2 className="w-4.5 h-4.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           {/* Action buttons footer */}
-          <div className="flex items-center justify-end gap-6 bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-4 shadow-sm select-none font-bold text-sm">
+          <div className={`sticky bottom-0 -mx-6 md:-mx-8 -mb-6 md:-mb-8 z-40 flex items-center justify-end gap-6 border-t border-zinc-200 dark:border-zinc-800 p-4 md:py-5 md:px-6 rounded-b-[24px] select-none font-bold text-sm ${isRegistration ? "bg-slate-50 dark:bg-zinc-900" : "bg-white dark:bg-zinc-950"
+            }`}>
             {mode === "view" ? (
               <button
                 type="button"
@@ -1310,110 +1318,113 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
            STEP 2: CONFIRM INFORMATION
            ======================================================= */
         <div className="flex flex-col gap-6">
-          {/* Card Thông tin hồ sơ */}
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-6">
-            <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
-              Thông tin hồ sơ
-            </h3>
+          <div className="flex-1 overflow-y-auto max-h-[60vh] lg:max-h-[calc(100vh-340px)] pr-2 -mr-2 flex flex-col gap-6 pb-2">
+            {/* Card Thông tin hồ sơ */}
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-6">
+              <h3 className="text-sm font-bold text-[#1e3a8a] dark:text-[#93c5fd] uppercase tracking-wider select-none border-b border-zinc-50 dark:border-zinc-900 pb-2 mb-4">
+                Thông tin hồ sơ
+              </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-y-4 gap-x-10 text-sm">
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Mã số thuế :</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.taxCode}</div>
+              <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-y-4 gap-x-10 text-sm">
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Mã số thuế :</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.taxCode}</div>
 
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Tên doanh nghiệp :</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.businessName}</div>
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Tên doanh nghiệp :</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.businessName}</div>
 
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Tên viết bằng tiếng nước ngoài :</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.foreignName || "-"}</div>
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Tên viết bằng tiếng nước ngoài :</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.foreignName || "-"}</div>
 
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Ngày cấp GPKD:</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">
-                {formData.licenseIssueDate ? formData.licenseIssueDate.split("-").reverse().join("/") : "-"}
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Ngày cấp GPKD:</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">
+                  {formData.licenseIssueDate ? formData.licenseIssueDate.split("-").reverse().join("/") : "-"}
+                </div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Email</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.email}</div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Loại hình kinh doanh:</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.businessType}</div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Ngành nghề kinh doanh</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">
+                  {formData.industryCode ? `${formData.industryCode} - ${formData.industryName}` : "-"}
+                </div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Địa chỉ đăng ký giấy phép kinh doanh :</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">
+                  {[formData.address, formData.wardCommune, formData.provinceCity].filter(Boolean).join(", ")}
+                </div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Địa điểm kinh doanh :</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">
+                  {[formData.businessLocation, formData.operatingWardCommune || formData.wardCommune, formData.operatingProvinceCity || formData.provinceCity].filter(Boolean).join(", ")}
+                </div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">Người đứng đầu doanh nghiệp</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.representativeName || "-"}</div>
+
+                <div className="font-semibold text-[#333333] dark:text-zinc-300">SĐT người đứng đầu</div>
+                <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.representativePhone || "-"}</div>
               </div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Email</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.email}</div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Loại hình kinh doanh:</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.businessType}</div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Ngành nghề kinh doanh</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">
-                {formData.industryCode ? `${formData.industryCode} - ${formData.industryName}` : "-"}
-              </div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Địa chỉ đăng ký giấy phép kinh doanh :</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">
-                {[formData.address, formData.wardCommune, formData.provinceCity].filter(Boolean).join(", ")}
-              </div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Địa điểm kinh doanh :</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">
-                {[formData.businessLocation, formData.operatingWardCommune || formData.wardCommune, formData.operatingProvinceCity || formData.provinceCity].filter(Boolean).join(", ")}
-              </div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">Người đứng đầu doanh nghiệp</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.representativeName || "-"}</div>
-
-              <div className="font-semibold text-[#333333] dark:text-zinc-300">SĐT người đứng đầu</div>
-              <div className="font-medium text-[#333333] dark:text-zinc-200">{formData.representativePhone || "-"}</div>
             </div>
-          </div>
 
-          {/* Attachments Preview List */}
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
-            <div className="overflow-x-auto border border-zinc-150 dark:border-zinc-850 rounded-xl">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-zinc-50/50 dark:bg-zinc-900/10 border-b border-zinc-150 dark:border-zinc-800 select-none text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
-                    <th className="p-3.5">Tên file</th>
-                    <th className="p-3.5">Thông tin file</th>
-                    <th className="p-3.5 w-24 text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-zinc-100 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-350">
-                    <td className="p-3.5 font-bold">Giấy phép kinh doanh</td>
-                    <td className="p-3.5 font-mono text-zinc-500">{attachments.gpkd.name || "Không đính kèm"}</td>
-                    <td className="p-3.5">
-                      <div className="flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handlePreviewClick("gpkd")}
-                          disabled={!attachments.gpkd.file && !attachments.gpkd.url}
-                          className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                          title="Xem file"
-                        >
-                          <Eye className="w-4.5 h-4.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+            {/* Attachments Preview List */}
+            <div className="bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+              <div className="overflow-x-auto border border-zinc-150 dark:border-zinc-850 rounded-xl">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-zinc-50/50 dark:bg-zinc-900/10 border-b border-zinc-150 dark:border-zinc-800 select-none text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                      <th className="p-3.5">Tên file</th>
+                      <th className="p-3.5">Thông tin file</th>
+                      <th className="p-3.5 w-24 text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-zinc-100 dark:border-zinc-850 text-xs font-semibold text-zinc-700 dark:text-zinc-350">
+                      <td className="p-3.5 font-bold">Giấy phép kinh doanh</td>
+                      <td className="p-3.5 font-mono text-zinc-500">{attachments.gpkd.name || "Không đính kèm"}</td>
+                      <td className="p-3.5">
+                        <div className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => (attachments.gpkd.file || attachments.gpkd.url) && handlePreviewClick("gpkd")}
+                            disabled={!attachments.gpkd.file && !attachments.gpkd.url}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                            title="Xem file"
+                          >
+                            <Eye className="w-4.5 h-4.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
 
-                  <tr className="text-xs font-semibold text-zinc-700 dark:text-zinc-350">
-                    <td className="p-3.5 font-bold">Giấy tờ khác</td>
-                    <td className="p-3.5 font-mono text-zinc-500">{attachments.gtk.name || "Không đính kèm"}</td>
-                    <td className="p-3.5">
-                      <div className="flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() => (attachments.gtk.file || attachments.gtk.url) && handlePreviewClick("gtk")}
-                          disabled={!attachments.gtk.file && !attachments.gtk.url}
-                          className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
-                          title="Xem file"
-                        >
-                          <Eye className="w-4.5 h-4.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    <tr className="text-xs font-semibold text-zinc-700 dark:text-zinc-350">
+                      <td className="p-3.5 font-bold">Giấy tờ khác</td>
+                      <td className="p-3.5 font-mono text-zinc-500">{attachments.gtk.name || "Không đính kèm"}</td>
+                      <td className="p-3.5">
+                        <div className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => (attachments.gtk.file || attachments.gtk.url) && handlePreviewClick("gtk")}
+                            disabled={!attachments.gtk.file && !attachments.gtk.url}
+                            className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-slate-400 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-all"
+                            title="Xem file"
+                          >
+                            <Eye className="w-4.5 h-4.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
           {/* Action buttons footer */}
-          <div className="flex items-center justify-end gap-6 bg-transparent p-0 select-none font-bold text-sm">
+          <div className={`sticky bottom-0 -mx-6 md:-mx-8 -mb-6 md:-mb-8 z-40 flex items-center justify-end gap-6 border-t border-zinc-200 dark:border-zinc-800 p-4 md:py-5 md:px-6 rounded-b-[24px] select-none font-bold text-sm ${isRegistration ? "bg-slate-50 dark:bg-zinc-900" : "bg-white dark:bg-zinc-950"
+            }`}>
             <button
               type="button"
               onClick={() => setStep(1)}
@@ -1505,7 +1516,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
           <div onClick={() => setShowOtpModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
-            
+
             {/* Title */}
             <div className="flex flex-col gap-2 items-center text-center">
               <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
@@ -1562,11 +1573,10 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                       setIsResendingOtp(false);
                     }
                   }}
-                  className={`underline cursor-pointer ${
-                    otpTimer > 0 
-                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline" 
+                  className={`underline cursor-pointer ${otpTimer > 0
+                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline"
                       : "text-[#2563eb] hover:text-[#1d4ed8]"
-                  }`}
+                    }`}
                 >
                   Gửi lại
                 </button>
@@ -1606,7 +1616,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   "Xác nhận"
                 )}
               </button>
-              
+
               <button
                 type="button"
                 disabled={isVerifyingOtp}
@@ -1625,7 +1635,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
           <div onClick={() => setShowProfileOtpModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
-            
+
             {/* Title */}
             <div className="flex flex-col gap-2 items-center text-center">
               <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
@@ -1682,11 +1692,10 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                       setIsResendingOtp(false);
                     }
                   }}
-                  className={`underline cursor-pointer ${
-                    otpTimer > 0 
-                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline" 
+                  className={`underline cursor-pointer ${otpTimer > 0
+                      ? "text-zinc-300 dark:text-zinc-700 cursor-not-allowed no-underline"
                       : "text-[#2563eb] hover:text-[#1d4ed8]"
-                  }`}
+                    }`}
                 >
                   Gửi lại
                 </button>
@@ -1710,7 +1719,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   "Xác nhận"
                 )}
               </button>
-              
+
               <button
                 type="button"
                 disabled={isVerifyingOtp}
@@ -1729,7 +1738,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
           <div onClick={() => setShowNewEmailModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/60 dark:border-zinc-800/80 rounded-[24px] w-full max-w-[440px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col p-8 gap-6">
-            
+
             {/* Title */}
             <div className="flex flex-col gap-2 items-center text-center">
               <h3 className="text-[#2563eb] text-xl font-extrabold tracking-wide uppercase">
@@ -1741,12 +1750,10 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
             </div>
 
             {/* Email Input Field */}
-            <div className={`relative border rounded-xl px-4 py-2.5 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${
-              newEmailError ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
-            }`}>
-              <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${
-                newEmailError ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+            <div className={`relative border rounded-xl px-4 py-2.5 flex flex-col justify-center focus-within:ring-1 focus-within:ring-blue-600 focus-within:border-blue-600 bg-white dark:bg-zinc-950 transition-all ${newEmailError ? "border-red-500 ring-1 ring-red-500" : "border-zinc-200 dark:border-zinc-800"
               }`}>
+              <label className={`absolute -top-2.5 left-3 bg-white dark:bg-zinc-950 px-1.5 text-[11px] font-bold ${newEmailError ? "text-red-500" : "text-zinc-400 dark:text-zinc-500"
+                }`}>
                 Email <span className="text-red-500">*</span>
               </label>
               <input
@@ -1783,7 +1790,7 @@ export const CreateEnterprise: React.FC<CreateEnterpriseProps> = ({
                   "Lưu"
                 )}
               </button>
-              
+
               <button
                 type="button"
                 disabled={isSavingNewEmail}
