@@ -818,128 +818,43 @@ function getCatalogName(type: string, id: number): string {
   return categories[id - 1] || "";
 }
 
-function getStoredLaborAccidentReports(): any[] {
-  if (typeof window === "undefined") return [];
-  const stored = localStorage.getItem("vna_mock_labor_accident_reports");
-  if (!stored) return [];
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveStoredLaborAccidentReports(reports: any[]) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("vna_mock_labor_accident_reports", JSON.stringify(reports));
-  }
-}
-
 export async function getDepartmentReports(query?: ListDepartmentReportsQuery) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let reports = getStoredLaborAccidentReports();
-
-  // Self-healing for admin: if any report is missing businessName/taxCode/business, fetch the first available business and attach it
-  const hasMissing = reports.some(r => (!r.businessName || r.businessName === "-") && (!r.taxCode || r.taxCode === "-"));
-  if (hasMissing) {
-    try {
-      const bizRes = await getBusinesses({ limit: 1 });
-      if (bizRes.success && bizRes.data && bizRes.data.items && bizRes.data.items.length > 0) {
-        const defaultBiz = bizRes.data.items[0];
-        let updated = false;
-        reports = reports.map(r => {
-          if ((!r.businessName || r.businessName === "-") && (!r.taxCode || r.taxCode === "-")) {
-            r.businessName = defaultBiz.businessName;
-            r.taxCode = defaultBiz.taxCode;
-            r.provinceCity = defaultBiz.provinceCity;
-            r.wardCommune = defaultBiz.wardCommune;
-            r.business = defaultBiz;
-            updated = true;
-          }
-          return r;
-        });
-        if (updated) {
-          saveStoredLaborAccidentReports(reports);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to run self-healing in getDepartmentReports:", e);
-    }
-  }
-
+  const params = new URLSearchParams();
   if (query) {
-    const { year, periodType, status, businessName, taxCode, provinceCity, wardCommune } = query;
-    if (year) {
-      reports = reports.filter((r) => String(r.reportPeriod?.year) === String(year));
-    }
-    if (periodType) {
-      reports = reports.filter((r) => r.reportPeriod?.periodType === periodType);
-    }
-    if (status) {
-      reports = reports.filter((r) => r.status === status);
-    }
-    if (businessName) {
-      const q = businessName.toLowerCase();
-      reports = reports.filter((r) => (r.businessName || "").toLowerCase().includes(q) || (r.business?.businessName || "").toLowerCase().includes(q));
-    }
-    if (taxCode) {
-      const q = taxCode.toLowerCase();
-      reports = reports.filter((r) => (r.taxCode || "").toLowerCase().includes(q) || (r.business?.taxCode || "").toLowerCase().includes(q));
-    }
-    if (provinceCity) {
-      reports = reports.filter((r) => r.provinceCity === provinceCity || r.business?.provinceCity === provinceCity);
-    }
-    if (wardCommune) {
-      reports = reports.filter((r) => r.wardCommune === wardCommune || r.business?.wardCommune === wardCommune);
-    }
-  }
-
-  const page = query?.page ? Number(query.page) : 1;
-  const limit = query?.limit ? Number(query.limit) : 10;
-  const startIndex = (page - 1) * limit;
-  const items = reports.slice(startIndex, startIndex + limit);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data: {
-      items,
-      meta: {
-        totalItems: reports.length,
-        itemCount: items.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(reports.length / limit),
-        currentPage: page,
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
       }
-    }
-  };
+    });
+  }
+  const queryString = params.toString();
+  return request<any>(`/labor-accident-reports/admin${queryString ? `?${queryString}` : ""}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function receiveDepartmentReport(id: number | string) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const reports = getStoredLaborAccidentReports();
-  const reportIndex = reports.findIndex((r) => String(r.id) === String(id));
+  return request<any>(`/labor-accident-reports/admin/${id}/receive`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+}
 
-  if (reportIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy báo cáo",
-      data: null
-    };
-  }
+export async function bulkReceiveDepartmentReports(ids: number[]) {
+  return request<any>(`/labor-accident-reports/admin/bulk-receive`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ids }),
+  });
+}
 
-  reports[reportIndex].status = "RECEIVED";
-  reports[reportIndex].updatedAt = new Date().toISOString();
-  saveStoredLaborAccidentReports(reports);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Tiếp nhận báo cáo thành công",
-    data: reports[reportIndex]
-  };
+export async function bulkRejectDepartmentReports(ids: number[], rejectReason: string) {
+  return request<any>(`/labor-accident-reports/admin/bulk-reject`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ ids, rejectReason }),
+  });
 }
 
 export async function getMyLaborAccidentReports(query?: {
@@ -949,464 +864,57 @@ export async function getMyLaborAccidentReports(query?: {
   periodType?: string;
   status?: string;
 }) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let reports = getStoredLaborAccidentReports();
-
-  // Self-healing: If any report in local storage is missing business name or tax code, fetch current business profile and update
-  let currentTaxCode = "";
-  try {
-    const profileRes = await getMyBusinessProfile();
-    if (profileRes.success && profileRes.data) {
-      const profile = profileRes.data;
-      currentTaxCode = profile.taxCode;
-      let updated = false;
-      reports = reports.map(r => {
-        if ((!r.businessName || r.businessName === "-") && (!r.taxCode || r.taxCode === "-")) {
-          r.businessName = profile.businessName;
-          r.taxCode = profile.taxCode;
-          r.provinceCity = profile.provinceCity;
-          r.wardCommune = profile.wardCommune;
-          r.business = profile;
-          updated = true;
-        }
-        return r;
-      });
-      if (updated) {
-        saveStoredLaborAccidentReports(reports);
-      }
-    }
-  } catch (e) {
-    console.error("Failed to run self-healing in getMyLaborAccidentReports:", e);
-  }
-
-  if (currentTaxCode) {
-    reports = reports.filter((r) => r.taxCode === currentTaxCode);
-  }
-
+  const params = new URLSearchParams();
   if (query) {
-    const { year, periodType, status } = query;
-    if (year) {
-      reports = reports.filter((r) => String(r.reportPeriod?.year) === String(year));
-    }
-    if (periodType) {
-      reports = reports.filter((r) => r.reportPeriod?.periodType === periodType);
-    }
-    if (status) {
-      reports = reports.filter((r) => r.status === status);
-    }
-  }
-
-  const page = query?.page ? Number(query.page) : 1;
-  const limit = query?.limit ? Number(query.limit) : 10;
-  const startIndex = (page - 1) * limit;
-  const items = reports.slice(startIndex, startIndex + limit);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data: {
-      items,
-      meta: {
-        totalItems: reports.length,
-        itemCount: items.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(reports.length / limit),
-        currentPage: page,
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
       }
-    }
-  };
+    });
+  }
+  const queryString = params.toString();
+  return request<any>(`/labor-accident-reports/my${queryString ? `?${queryString}` : ""}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function getMyLaborAccidentReportDetail(id: number | string) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let reports = getStoredLaborAccidentReports();
-  const reportIndex = reports.findIndex((r) => String(r.id) === String(id));
-
-  if (reportIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy báo cáo",
-      data: null
-    };
-  }
-
-  let report = reports[reportIndex];
-  if ((!report.businessName || report.businessName === "-") && (!report.taxCode || report.taxCode === "-")) {
-    try {
-      const profileRes = await getMyBusinessProfile();
-      if (profileRes.success && profileRes.data) {
-        const profile = profileRes.data;
-        report.businessName = profile.businessName;
-        report.taxCode = profile.taxCode;
-        report.provinceCity = profile.provinceCity;
-        report.wardCommune = profile.wardCommune;
-        report.business = profile;
-        reports[reportIndex] = report;
-        saveStoredLaborAccidentReports(reports);
-      }
-    } catch (e) {
-      console.error("Failed to run self-healing in getMyLaborAccidentReportDetail:", e);
-    }
-  }
-
-  // Check permission
-  let currentTaxCode = "";
-  try {
-    const profileRes = await getMyBusinessProfile();
-    if (profileRes.success && profileRes.data) {
-      currentTaxCode = profileRes.data.taxCode;
-    }
-  } catch (e) { }
-
-  if (currentTaxCode && report.taxCode && report.taxCode !== currentTaxCode) {
-    return {
-      success: false,
-      statusCode: 403,
-      message: "Không có quyền truy cập báo cáo này",
-      data: null
-    };
-  }
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data: report
-  };
+  return request<any>(`/labor-accident-reports/my/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function saveLaborAccidentReportDraft(body: FormData) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const reports = getStoredLaborAccidentReports();
-
-  let businessProfile: BusinessListItem | null = null;
-  try {
-    const profileRes = await getMyBusinessProfile();
-    if (profileRes.success && profileRes.data) {
-      businessProfile = profileRes.data;
-    }
-  } catch (e) {
-    console.error("Failed to fetch business profile during save draft:", e);
-  }
-
-  const reportPeriodId = Number(body.get("reportPeriodId"));
-  const totalEmployees = Number(body.get("totalEmployees") || 0);
-  const femaleEmployees = Number(body.get("femaleEmployees") || 0);
-  const totalPayroll = Number(body.get("totalPayroll") || 0);
-  const totalAccidents = Number(body.get("totalAccidents") || 0);
-  const fatalAccidents = Number(body.get("fatalAccidents") || 0);
-  const accidentsWithTwoOrMoreVictims = Number(body.get("accidentsWithTwoOrMoreVictims") || 0);
-  const totalVictims = Number(body.get("totalVictims") || 0);
-  const femaleVictims = Number(body.get("femaleVictims") || 0);
-  const deathVictims = Number(body.get("deathVictims") || 0);
-  const severeInjuryVictims = Number(body.get("severeInjuryVictims") || 0);
-  const victimsNotUnderManagement = Number(body.get("victimsNotUnderManagement") || 0);
-  const femaleVictimsNotUnderManagement = Number(body.get("femaleVictimsNotUnderManagement") || 0);
-  const deathVictimsNotUnderManagement = Number(body.get("deathVictimsNotUnderManagement") || 0);
-  const severeInjuryVictimsNotUnderManagement = Number(body.get("severeInjuryVictimsNotUnderManagement") || 0);
-  const medicalCost = Number(body.get("medicalCost") || 0);
-  const salaryPaymentCost = Number(body.get("salaryPaymentCost") || 0);
-  const allowanceCost = Number(body.get("allowanceCost") || 0);
-  const totalCost = Number(body.get("totalCost") || 0);
-  const totalDaysOff = Number(body.get("totalDaysOff") || 0);
-  const propertyDamage = Number(body.get("propertyDamage") || 0);
-
-  const detailsRaw = body.get("details");
-  let details: any[] = [];
-  if (typeof detailsRaw === "string") {
-    try {
-      details = JSON.parse(detailsRaw);
-    } catch (e) {
-      console.error("Error parsing details JSON:", e);
-    }
-  }
-
-  // Find if draft for this period already exists
-  let reportIndex = reports.findIndex((r) => r.reportPeriodId === reportPeriodId);
-  let reportId: number;
-
-  const periods = getStoredReportPeriods();
-  const reportPeriod = periods.find((p) => p.id === reportPeriodId);
-
-  const newReportData: any = {
-    reportPeriodId,
-    reportPeriod,
-    totalEmployees,
-    femaleEmployees,
-    totalPayroll,
-    totalAccidents,
-    fatalAccidents,
-    accidentsWithTwoOrMoreVictims,
-    totalVictims,
-    femaleVictims,
-    deathVictims,
-    severeInjuryVictims,
-    victimsNotUnderManagement,
-    femaleVictimsNotUnderManagement,
-    deathVictimsNotUnderManagement,
-    severeInjuryVictimsNotUnderManagement,
-    medicalCost,
-    salaryPaymentCost,
-    allowanceCost,
-    totalCost,
-    totalDaysOff,
-    propertyDamage,
-    details: details.map((d: any) => {
-      return {
-        ...d,
-        accidentCauseCatalog: d.accidentCauseCatalogId ? { id: d.accidentCauseCatalogId, name: getCatalogName("ACCIDENT_CAUSE", d.accidentCauseCatalogId) } : null,
-        injuryFactorCatalog: d.injuryFactorCatalogId ? { id: d.injuryFactorCatalogId, name: getCatalogName("INJURY_FACTOR", d.injuryFactorCatalogId) } : null,
-        occupationCatalog: d.occupationCatalogId ? { id: d.occupationCatalogId, name: getCatalogName("OCCUPATION", d.occupationCatalogId) } : null,
-      };
-    }),
-    status: "DRAFT",
-    updatedAt: new Date().toISOString()
-  };
-
-  if (businessProfile) {
-    newReportData.businessName = businessProfile.businessName;
-    newReportData.taxCode = businessProfile.taxCode;
-    newReportData.provinceCity = businessProfile.provinceCity;
-    newReportData.wardCommune = businessProfile.wardCommune;
-    newReportData.business = businessProfile;
-  }
-
-  if (reportIndex !== -1) {
-    reportId = reports[reportIndex].id;
-    reports[reportIndex] = {
-      ...reports[reportIndex],
-      ...newReportData,
-    };
-  } else {
-    reportId = reports.reduce((max, r) => (r.id > max ? r.id : max), 0) + 1;
-    reports.push({
-      id: reportId,
-      ...newReportData,
-      createdAt: new Date().toISOString()
-    });
-  }
-
-  saveStoredLaborAccidentReports(reports);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Lưu nháp thành công",
-    data: reports.find((r) => r.id === reportId)
-  };
+  return request<any>("/labor-accident-reports/my/draft", {
+    method: "POST",
+    headers: authHeaders(),
+    body,
+  });
 }
 
 export async function submitLaborAccidentReport(id: number | string, body: FormData) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const reports = getStoredLaborAccidentReports();
-  const reportIndex = reports.findIndex((r) => String(r.id) === String(id));
-
-  if (reportIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy báo cáo",
-      data: null
-    };
-  }
-
-  reports[reportIndex].status = "SUBMITTED";
-  reports[reportIndex].updatedAt = new Date().toISOString();
-
-  let businessProfile: BusinessListItem | null = null;
-  try {
-    const profileRes = await getMyBusinessProfile();
-    if (profileRes.success && profileRes.data) {
-      businessProfile = profileRes.data;
-    }
-  } catch (e) {
-    console.error("Failed to fetch business profile during submit report:", e);
-  }
-
-  if (businessProfile) {
-    reports[reportIndex].businessName = businessProfile.businessName;
-    reports[reportIndex].taxCode = businessProfile.taxCode;
-    reports[reportIndex].provinceCity = businessProfile.provinceCity;
-    reports[reportIndex].wardCommune = businessProfile.wardCommune;
-    reports[reportIndex].business = businessProfile;
-  }
-
-  const attachmentNamesRaw = body.get("attachmentNames");
-  if (typeof attachmentNamesRaw === "string") {
-    try {
-      const names = JSON.parse(attachmentNamesRaw);
-      if (names && names.length > 0) {
-        const file = body.get("attachments");
-        let fileUrl = "#";
-        if (file && typeof window !== "undefined") {
-          try {
-            if ((file as any) instanceof Blob) {
-              fileUrl = URL.createObjectURL(file as any);
-            }
-          } catch (e) {
-            console.error("Failed to create object URL:", e);
-          }
-        }
-        reports[reportIndex].attachments = [
-          {
-            id: 1,
-            displayName: names[0],
-            originalName: names[0],
-            fileUrl: fileUrl,
-            mimetype: "application/pdf",
-            size: 1024 * 1024,
-            createdAt: new Date().toISOString()
-          }
-        ];
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  saveStoredLaborAccidentReports(reports);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Gửi báo cáo thành công",
-    data: reports[reportIndex]
-  };
+  return request<any>(`/labor-accident-reports/my/${id}/submit`, {
+    method: "POST",
+    headers: authHeaders(),
+    body,
+  });
 }
 
 export async function getCatalogOptions(type?: string) {
-  let categories: string[] = [];
-  if (type === "ACCIDENT_CAUSE") {
-    categories = [
-      "Không có thiết bị an toàn hoặc thiết bị không đảm bảo an toàn",
-      "Không có phương tiện bảo vệ cá nhân hoặc phương tiện bảo vệ cá nhân không tốt",
-      "Tổ chức lao động không hợp lý",
-      "Chưa huấn luyện hoặc huấn luyện an toàn vệ sinh lao động chưa đầy đủ",
-      "Không có quy trình an toàn hoặc biện pháp làm việc an toàn",
-      "Điều kiện làm việc không tốt",
-      "Vi phạm nội quy, quy trình, biện pháp làm việc an toàn",
-      "Không sử dụng phương tiện bảo vệ cá nhân",
-      "Khách quan khó tránh/ Nguyên nhân chưa kể đến"
-    ];
-  } else if (type === "INJURY_FACTOR") {
-    categories = [
-      "Thiết bị nâng",
-      "Máy gia công cắt gọt kim loại, gỗ",
-      "Điện giật",
-      "Ngã từ trên cao",
-      "Vật rơi, vật văng bắn",
-      "Nhiệt độ cao, bỏng lửa",
-      "Khác"
-    ];
-  } else if (type === "OCCUPATION") {
-    categories = [
-      "Nhà lãnh đạo cơ quan Đảng Cộng sản Việt nam cấp Trung ương",
-      "Công nhân",
-      "Nhà quản lý, điều hành doanh nghiệp",
-      "Kỹ sư, kỹ thuật viên chuyên nghiệp",
-      "Thợ vận hành máy và thiết bị",
-      "Lao động thủ công giản đơn",
-      "Khác"
-    ];
-  }
-
-  const data = categories.map((name, index) => ({
-    id: index + 1,
-    name,
-    type,
-    code: `${type}_${index + 1}`
-  }));
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data
-  };
+  const query = type ? `?type=${type}` : "";
+  return request<any>(`/labor-accident-catalogs/options${query}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function getDepartmentReportDetail(id: number | string) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let reports = getStoredLaborAccidentReports();
-  const reportIndex = reports.findIndex((r) => String(r.id) === String(id));
-
-  if (reportIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy báo cáo",
-      data: null
-    };
-  }
-
-  let report = reports[reportIndex];
-  if ((!report.businessName || report.businessName === "-") && (!report.taxCode || report.taxCode === "-")) {
-    try {
-      const bizRes = await getBusinesses({ limit: 1 });
-      if (bizRes.success && bizRes.data && bizRes.data.items && bizRes.data.items.length > 0) {
-        const defaultBiz = bizRes.data.items[0];
-        report.businessName = defaultBiz.businessName;
-        report.taxCode = defaultBiz.taxCode;
-        report.provinceCity = defaultBiz.provinceCity;
-        report.wardCommune = defaultBiz.wardCommune;
-        report.business = defaultBiz;
-        reports[reportIndex] = report;
-        saveStoredLaborAccidentReports(reports);
-      }
-    } catch (e) {
-      console.error("Failed to run self-healing in getDepartmentReportDetail:", e);
-    }
-  }
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data: report
-  };
-}
-
-const DEFAULT_REPORT_PERIODS = [
-  {
-    id: 1,
-    reportName: "Báo cáo tai nạn lao động 6 tháng đầu năm 2026",
-    year: 2026,
-    periodType: "SIX_MONTHS",
-    startDate: "2026-01-01",
-    endDate: "2026-06-30",
-    isActive: true,
-  },
-  {
-    id: 2,
-    reportName: "Báo cáo tai nạn lao động cả năm 2026",
-    year: 2026,
-    periodType: "FULL_YEAR",
-    startDate: "2026-01-01",
-    endDate: "2026-12-31",
-    isActive: true,
-  },
-];
-
-function getStoredReportPeriods(): any[] {
-  if (typeof window === "undefined") return DEFAULT_REPORT_PERIODS;
-  const stored = localStorage.getItem("vna_mock_report_periods");
-  if (!stored) {
-    localStorage.setItem("vna_mock_report_periods", JSON.stringify(DEFAULT_REPORT_PERIODS));
-    return DEFAULT_REPORT_PERIODS;
-  }
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return DEFAULT_REPORT_PERIODS;
-  }
-}
-
-function saveStoredReportPeriods(periods: any[]) {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("vna_mock_report_periods", JSON.stringify(periods));
-  }
+  return request<any>(`/labor-accident-reports/admin/${id}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function getReportPeriods(query?: {
@@ -1419,61 +927,19 @@ export async function getReportPeriods(query?: {
   endDate?: string;
   isActive?: string | boolean;
 }) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  let periods = getStoredReportPeriods();
-
+  const params = new URLSearchParams();
   if (query) {
-    const { year, reportName, periodType, startDate, endDate, isActive } = query;
-
-    if (year !== undefined && year !== null && year !== "") {
-      periods = periods.filter((p) => String(p.year) === String(year));
-    }
-
-    if (reportName !== undefined && reportName !== null && reportName !== "") {
-      const searchName = String(reportName).toLowerCase();
-      periods = periods.filter((p) =>
-        p.reportName.toLowerCase().includes(searchName)
-      );
-    }
-
-    if (periodType !== undefined && periodType !== null && periodType !== "") {
-      periods = periods.filter((p) => p.periodType === periodType);
-    }
-
-    if (startDate !== undefined && startDate !== null && startDate !== "") {
-      periods = periods.filter((p) => p.startDate >= startDate);
-    }
-
-    if (endDate !== undefined && endDate !== null && endDate !== "") {
-      periods = periods.filter((p) => p.endDate <= endDate);
-    }
-
-    if (isActive !== undefined && isActive !== null && isActive !== "") {
-      const activeBool = isActive === true || isActive === "true";
-      periods = periods.filter((p) => p.isActive === activeBool);
-    }
+    Object.entries(query).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== "") {
+        params.append(key, String(val));
+      }
+    });
   }
-
-  const page = query?.page ? Number(query.page) : 1;
-  const limit = query?.limit ? Number(query.limit) : 10;
-  const startIndex = (page - 1) * limit;
-  const items = periods.slice(startIndex, startIndex + limit);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Thành công",
-    data: {
-      items,
-      meta: {
-        totalItems: periods.length,
-        itemCount: items.length,
-        itemsPerPage: limit,
-        totalPages: Math.ceil(periods.length / limit),
-        currentPage: page,
-      },
-    },
-  };
+  const queryString = params.toString();
+  return request<any>(`/labor-accident-report-periods${queryString ? `?${queryString}` : ""}`, {
+    method: "GET",
+    headers: authHeaders(),
+  });
 }
 
 export async function createReportPeriod(body: {
@@ -1484,43 +950,11 @@ export async function createReportPeriod(body: {
   endDate: string;
   isActive?: boolean;
 }) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const periods = getStoredReportPeriods();
-  console.log("createReportPeriod call - body:", body, "periods:", periods);
-
-  const duplicate = periods.find(
-    (p) => Number(p.year) === Number(body.year) && p.periodType === body.periodType
-  );
-  if (duplicate) {
-    console.warn("createReportPeriod duplicate found:", duplicate);
-    return {
-      success: false,
-      statusCode: 400,
-      message: `Kỳ báo cáo ${body.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"} của năm ${body.year} đã tồn tại!`,
-      data: null,
-    };
-  }
-
-  const maxId = periods.reduce((max, p) => (p.id > max ? p.id : max), 0);
-  const newItem = {
-    id: maxId + 1,
-    reportName: body.reportName,
-    year: Number(body.year),
-    periodType: body.periodType,
-    startDate: body.startDate,
-    endDate: body.endDate,
-    isActive: body.isActive !== undefined ? body.isActive : true,
-  };
-
-  periods.push(newItem);
-  saveStoredReportPeriods(periods);
-
-  return {
-    success: true,
-    statusCode: 201,
-    message: "Tạo kỳ báo cáo thành công",
-    data: newItem,
-  };
+  return request<any>("/labor-accident-report-periods", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateReportPeriod(id: number | string, body: {
@@ -1531,80 +965,20 @@ export async function updateReportPeriod(id: number | string, body: {
   endDate?: string;
   isActive?: boolean;
 }) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const periods = getStoredReportPeriods();
-  const itemIndex = periods.findIndex((p) => String(p.id) === String(id));
-
-  if (itemIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy kỳ báo cáo",
-      data: null,
-    };
-  }
-
-  console.log("updateReportPeriod call - id:", id, "body:", body, "periods:", periods);
-  const targetYear = body.year !== undefined ? Number(body.year) : periods[itemIndex].year;
-  const targetPeriodType = body.periodType !== undefined ? body.periodType : periods[itemIndex].periodType;
-
-  const duplicate = periods.find(
-    (p) => String(p.id) !== String(id) && Number(p.year) === Number(targetYear) && p.periodType === targetPeriodType
-  );
-  if (duplicate) {
-    console.warn("updateReportPeriod duplicate found:", duplicate);
-    return {
-      success: false,
-      statusCode: 400,
-      message: `Kỳ báo cáo ${targetPeriodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"} của năm ${targetYear} đã tồn tại!`,
-      data: null,
-    };
-  }
-
-  const updatedItem = {
-    ...periods[itemIndex],
-    ...(body.reportName !== undefined && { reportName: body.reportName }),
-    ...(body.year !== undefined && { year: Number(body.year) }),
-    ...(body.periodType !== undefined && { periodType: body.periodType }),
-    ...(body.startDate !== undefined && { startDate: body.startDate }),
-    ...(body.endDate !== undefined && { endDate: body.endDate }),
-    ...(body.isActive !== undefined && { isActive: body.isActive }),
-  };
-
-  periods[itemIndex] = updatedItem;
-  saveStoredReportPeriods(periods);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Cập nhật kỳ báo cáo thành công",
-    data: updatedItem,
-  };
+  return request<any>(`/labor-accident-report-periods/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateReportPeriodStatus(id: number | string, isActive: boolean) {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const periods = getStoredReportPeriods();
-  const itemIndex = periods.findIndex((p) => String(p.id) === String(id));
-
-  if (itemIndex === -1) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Không tìm thấy kỳ báo cáo",
-      data: null,
-    };
-  }
-
-  periods[itemIndex].isActive = isActive;
-  saveStoredReportPeriods(periods);
-
-  return {
-    success: true,
-    statusCode: 200,
-    message: "Cập nhật trạng thái thành công",
-    data: periods[itemIndex],
-  };
+  return request<any>(`/labor-accident-report-periods/${id}/status`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ isActive }),
+  });
 }
+
 
 

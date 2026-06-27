@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { ArrowLeft, Printer, AlertCircle, Loader2 } from "lucide-react";
 import { getDepartmentReportDetail } from "../services/api";
+import { exportReportDocx } from "../utils/reportExporter";
 
 interface ReportDetailProps {
   report: {
@@ -36,6 +37,7 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
 }) => {
   const [detail, setDetail] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isGeneratingWord, setIsGeneratingWord] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -59,8 +61,18 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
     fetchDetail();
   }, [report.id]);
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrintWord = async () => {
+    if (!detail) return;
+    setIsGeneratingWord(true);
+    try {
+      await exportReportDocx(detail, detail.business);
+      showToast("Tải báo cáo Word thành công!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Không thể xuất báo cáo Word.", "error");
+    } finally {
+      setIsGeneratingWord(false);
+    }
   };
 
   const handleDownloadAttachment = (e: React.MouseEvent) => {
@@ -441,11 +453,16 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
             Quay lại
           </button>
           <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer"
+            disabled={isGeneratingWord}
+            onClick={handlePrintWord}
+            className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-md shadow-blue-500/10 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
           >
-            <Printer className="w-4 h-4" />
-            <span>In báo cáo</span>
+            {isGeneratingWord ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4" />
+            )}
+            <span>{isGeneratingWord ? "Đang tạo Word..." : "In báo cáo"}</span>
           </button>
         </div>
       </div>
@@ -653,67 +670,53 @@ export const DepartmentReportDetail: React.FC<ReportDetailProps> = ({
 
             {/* Section 2: Damage Summary Table */}
             <div className="flex flex-col gap-3 mt-4">
-              <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
-                II. Thiệt hại do tai nạn lao động
-              </h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border border-zinc-200 dark:border-zinc-800 border-collapse min-w-[1000px]">
+              <div className="border-b border-zinc-200 dark:border-zinc-800 pb-1">
+                <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase">
+                  II. Thiệt hại do tai nạn lao động
+                </h4>
+              </div>
+              <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm bg-white dark:bg-zinc-950">
+                <table className="w-full border-collapse text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   <thead>
-                    <tr className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 text-center font-bold text-zinc-700 dark:text-zinc-300">
-                      <th
-                        rowSpan={3}
-                        className="p-3 border-r border-zinc-200 dark:border-zinc-800 w-[35%] text-left"
-                      >
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/20 text-zinc-550 dark:text-zinc-400 font-bold select-none text-center">
+                      <th rowSpan={3} className="p-3 border-r border-zinc-200 dark:border-zinc-800 text-left min-w-[280px]">
                         Tổng số ngày nghỉ vì tai nạn lao động (kể cả ngày nghỉ chế độ)
                       </th>
-                      <th
-                        colSpan={5}
-                        className="p-2 border-r border-zinc-200 dark:border-zinc-800"
-                      >
-                        Tổng số tiền chi phí (1.000đ)
+                      <th colSpan={4} className="p-2 border-r border-zinc-200 dark:border-zinc-800">
+                        Tổng số ngày nghỉ vi TNLĐ (1.000đ)
                       </th>
-                      <th
-                        rowSpan={3}
-                        className="p-3 border-r border-zinc-200 dark:border-zinc-800 w-[20%]"
-                      >
+                      <th rowSpan={3} className="p-3 w-44">
                         Thiệt hại tài sản (1.000đ)
                       </th>
                     </tr>
-
-                    <tr className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-850 text-center font-bold text-zinc-650 dark:text-zinc-400">
-                      <th rowSpan={2} className="p-2 border-r border-zinc-200 dark:border-zinc-800 w-[15%]">
-                        Tổng số
-                      </th>
-                      <th colSpan={3} className="p-2 border-r border-zinc-200 dark:border-zinc-800">
-                        Khoản chi cụ thể của cơ sở
-                      </th>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/20 text-zinc-550 dark:text-zinc-400 font-bold select-none text-center text-[10px]">
+                      <th rowSpan={2} className="p-2 border-r border-zinc-200 dark:border-zinc-800 w-24">Tổng số</th>
+                      <th colSpan={3} className="p-2 border-r border-zinc-200 dark:border-zinc-800">Khoảng chi cụ thể của cơ sở</th>
                     </tr>
-
-                    <tr className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-850 text-center font-bold text-zinc-500 dark:text-zinc-400 text-[10px]">
-                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800">Y tế</th>
-                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800">Trả lương trong thời gian điều trị</th>
-                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800">Bồi thường trợ cấp</th>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/20 text-zinc-550 dark:text-zinc-400 font-bold select-none text-center text-[10px]">
+                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800 w-24">Y tế</th>
+                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800 w-36">Trả lương trong thời gian điều trị</th>
+                      <th className="p-2 border-r border-zinc-200 dark:border-zinc-800 w-28">Bồi thường trợ cấp</th>
                     </tr>
                   </thead>
-
                   <tbody>
-                    <tr className="border-b border-zinc-200 dark:border-zinc-800 text-center font-semibold text-sm">
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-left font-bold text-zinc-900 dark:text-zinc-100">
+                    <tr className="text-center font-bold text-zinc-800 dark:text-zinc-200">
+                      <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">
                         {detail ? detail.totalDaysOff : "0"}
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-blue-600 dark:text-blue-400 font-bold">
+                      <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-blue-600 dark:text-blue-400 text-center">
                         {detail ? formatNumberWithDots(detail.totalCost) : "0"}
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
+                      <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">
                         {detail ? formatNumberWithDots(detail.medicalCost) : "0"}
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
+                      <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">
                         {detail ? formatNumberWithDots(detail.salaryPaymentCost) : "0"}
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800">
+                      <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">
                         {detail ? formatNumberWithDots(detail.allowanceCost) : "0"}
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 text-red-600 dark:text-red-400 font-bold">
+                      <td className="p-3.5 text-center text-red-600 dark:text-red-400 font-bold">
                         {detail ? formatNumberWithDots(detail.propertyDamage) : "0"}
                       </td>
                     </tr>

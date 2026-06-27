@@ -63,7 +63,8 @@ interface ReportData {
   reportPeriodId?: number;
   year: number;
   period: string; // "6 tháng" | "Cả năm"
-  status: "Đang báo cáo" | "Đã tiếp nhận";
+  status: "Đang báo cáo" | "Đang chờ duyệt" | "Đã tiếp nhận" | "Từ chối phê duyệt";
+  rejectReason?: string;
   enterpriseName: string;
   taxCode: string;
   businessType: string;
@@ -413,7 +414,8 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
       reportPeriodId: r.reportPeriod?.id,
       year: r.reportPeriod?.year || new Date().getFullYear(),
       period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
-      status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
+      status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đang chờ duyệt" : r.status === "REJECTED" ? "Từ chối phê duyệt" : "Đang báo cáo",
+      rejectReason: r.rejectReason || "",
       enterpriseName: r.businessName || profile?.businessName || "",
       taxCode: r.taxCode || profile?.taxCode || "",
       businessType: r.businessType || profile?.businessType || "",
@@ -540,7 +542,8 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           reportPeriodId: r.reportPeriod?.id,
           year: r.reportPeriod?.year || new Date().getFullYear(),
           period: r.reportPeriod?.periodTypeLabel || (r.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
-          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đã tiếp nhận" : "Đang báo cáo",
+          status: r.status === "RECEIVED" ? "Đã tiếp nhận" : r.status === "SUBMITTED" ? "Đang chờ duyệt" : r.status === "REJECTED" ? "Từ chối phê duyệt" : "Đang báo cáo",
+          rejectReason: r.rejectReason || "",
           enterpriseName: r.businessName || profile?.businessName || "",
           taxCode: r.taxCode || profile?.taxCode || "",
           businessType: r.businessType || profile?.businessType || "",
@@ -910,6 +913,14 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
         if (idx === blockIdx) {
           const updated = { ...b, [field]: val };
           
+          // Auto-calculate accident stats
+          const totalVictims = parseDotsToNumber(updated.tongSoNguoiBiNan || "0");
+          const deaths = parseDotsToNumber(updated.soNguoiChet || "0") + parseDotsToNumber(updated.soNguoiChetKhongQL || "0");
+          
+          updated.tongSoVu = "1";
+          updated.soVuCoNguoiChet = deaths > 0 ? "1" : "0";
+          updated.soVuHaiNguoiTroLen = totalVictims >= 2 ? "1" : "0";
+
           if (field === "chiPhiYTe" || field === "chiPhiLuong" || field === "chiPhiBoiThuong") {
             const yte = parseDotsToNumber(field === "chiPhiYTe" ? val : b.chiPhiYTe);
             const luong = parseDotsToNumber(field === "chiPhiLuong" ? val : b.chiPhiLuong);
@@ -1207,6 +1218,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
           const blockMsgs: string[] = [];
 
           countFields.forEach(f => {
+            if (f === "tongSoVu" || f === "soVuCoNguoiChet" || f === "soVuHaiNguoiTroLen") return;
             if (block[f as keyof AccidentDetailBlock] === undefined || block[f as keyof AccidentDetailBlock] === null || String(block[f as keyof AccidentDetailBlock]).trim() === "") {
               blockErrs[f] = "Bắt buộc";
               blockHasError = true;
@@ -1972,10 +1984,10 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                           >
                             <Eye className="h-[18px] w-[18px] text-zinc-400 group-hover:text-green-600 transition-colors" />
                           </button>
-                          {rep.status === "Đang báo cáo" && (
+                          {(rep.status === "Đang báo cáo" || rep.status === "Từ chối phê duyệt") && (
                             <button
                               onClick={() => handleEditClick(rep, false)}
-                              title="Chỉnh sửa khai báo"
+                              title={rep.status === "Từ chối phê duyệt" ? "Cập nhật / Nộp lại" : "Chỉnh sửa khai báo"}
                               className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-all cursor-pointer group"
                             >
                               <Pencil className="h-[18px] w-[18px] text-zinc-400 group-hover:text-blue-600 transition-colors" />
@@ -1995,12 +2007,16 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-50 dark:bg-zinc-900 select-none">
                           <span className={`w-2 h-2 rounded-full ${
-                            rep.status === "Đang báo cáo"
-                              ? "bg-gray-400"
-                              : "bg-blue-600 animate-pulse"
+                            rep.status === "Đang báo cáo" ? "bg-zinc-400" :
+                            rep.status === "Đang chờ duyệt" ? "bg-amber-500 animate-pulse" :
+                            rep.status === "Đã tiếp nhận" ? "bg-blue-600" :
+                            rep.status === "Từ chối phê duyệt" ? "bg-red-500 animate-pulse" : "bg-zinc-400"
                           }`} />
                           <span className={
-                            rep.status === "Đang báo cáo" ? "text-zinc-550" : "text-blue-600"
+                            rep.status === "Đang báo cáo" ? "text-zinc-550" :
+                            rep.status === "Đang chờ duyệt" ? "text-amber-600 dark:text-amber-400" :
+                            rep.status === "Đã tiếp nhận" ? "text-blue-600 dark:text-blue-400" :
+                            rep.status === "Từ chối phê duyệt" ? "text-red-500 dark:text-red-400" : "text-zinc-550"
                           }>
                             {rep.status}
                           </span>
@@ -2170,6 +2186,17 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {formData && formData.status === "Từ chối phê duyệt" && formData.rejectReason && (
+        <div className="bg-red-50 dark:bg-red-955/10 border border-red-200 dark:border-red-900 rounded-2xl p-4 flex flex-col gap-1.5 select-text animate-in fade-in slide-in-from-top-1 duration-200 no-print">
+          <span className="text-xs font-bold text-red-650 dark:text-red-400 uppercase tracking-wider">
+            Báo cáo bị Sở Lao động - Thương binh và Xã hội từ chối
+          </span>
+          <span className="text-sm font-bold text-red-900 dark:text-red-300 leading-normal">
+            Lý do từ chối: {formData.rejectReason}
+          </span>
         </div>
       )}
 
@@ -2562,9 +2589,6 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                                 </h5>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                   {[
-                                    { label: "Tổng số vụ", name: "tongSoVu" },
-                                    { label: "Tổng số vụ có người chết", name: "soVuCoNguoiChet" },
-                                    { label: "Tổng số vụ có từ 2 người bị nạn trở lên", name: "soVuHaiNguoiTroLen" },
                                     { label: "Tổng số người bị nạn", name: "tongSoNguoiBiNan" },
                                     { label: "Tổng số lao động nữ bị nạn", name: "soLaoDongNuBiNan" },
                                     { label: "Tổng số người bị chết", name: "soNguoiChet" },
@@ -3160,7 +3184,7 @@ export const TnldTheoHdld: React.FC<TnldTheoHdldProps> = ({ showToast }) => {
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiYTe || "0"}</td>
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiLuong || "0"}</td>
                         <td className="p-3.5 border-r border-zinc-200 dark:border-zinc-800 text-center">{formData.chiPhiBoiThuong || "0"}</td>
-                        <td className="p-3.5 text-center">{formData.thietHaiTaiSan || "0"}</td>
+                        <td className="p-3.5 text-center text-red-600 dark:text-red-400 font-bold">{formData.thietHaiTaiSan || "0"}</td>
                       </tr>
                     </tbody>
                   </table>

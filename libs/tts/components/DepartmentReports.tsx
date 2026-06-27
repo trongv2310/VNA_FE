@@ -9,7 +9,14 @@ import {
   Eye,
   FileText,
 } from "lucide-react";
-import { getDepartmentReports, receiveDepartmentReport, getReportPeriods, getStoredBackendUser } from "../services/api";
+import {
+  getDepartmentReports,
+  receiveDepartmentReport,
+  getReportPeriods,
+  getStoredBackendUser,
+  bulkReceiveDepartmentReports,
+  bulkRejectDepartmentReports
+} from "../services/api";
 import { DepartmentReportDetail } from "./DepartmentReportDetail";
 import { useAddress } from "../hooks/useAddress";
 
@@ -23,8 +30,9 @@ interface ReportItem {
   taxCode: string;
   periodType: "SIX_MONTHS" | "FULL_YEAR";
   periodLabel: string;
-  status: "DRAFT" | "SUBMITTED" | "RECEIVED";
+  status: "DRAFT" | "SUBMITTED" | "RECEIVED" | "REJECTED";
   statusLabel: string;
+  submittedAt?: string | null;
 }
 
 export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast }) => {
@@ -77,6 +85,13 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
   const [totalItems, setTotalItems] = useState(0);
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState(false);
+  const [showRejectConfirmModal, setShowRejectConfirmModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Sync API reports if available
   useEffect(() => {
     let active = true;
@@ -104,7 +119,12 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
             periodType: item.reportPeriod?.periodType || item.periodType,
             periodLabel: item.reportPeriod?.periodTypeLabel || (item.reportPeriod?.periodType === "SIX_MONTHS" ? "6 tháng" : "Cả năm"),
             status: item.status,
-            statusLabel: item.statusLabel || (item.status === "RECEIVED" ? "Đã tiếp nhận" : item.status === "SUBMITTED" ? "Chờ tiếp nhận" : "Đang báo cáo"),
+            statusLabel: item.statusLabel || (
+              item.status === "RECEIVED" ? "Đã tiếp nhận" :
+              item.status === "SUBMITTED" ? "Đang chờ duyệt" :
+              item.status === "REJECTED" ? "Từ chối phê duyệt" : "Đang báo cáo"
+            ),
+            submittedAt: item.submittedAt || null,
           }));
           setReports(items);
           setTotalItems(response.data.meta?.totalItems || items.length);
@@ -135,18 +155,32 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
       active = false;
       clearTimeout(delayDebounceFn);
     };
-  }, [page, limit, year, provinceCity, wardCommune, businessNameQuery, taxCodeQuery, periodFilter, statusFilter]);
+  }, [page, limit, year, provinceCity, wardCommune, businessNameQuery, taxCodeQuery, periodFilter, statusFilter, reloadTrigger]);
 
   // Selections
   const handleSelectAll = () => {
-    if (selectedIds.length === reports.length) {
-      setSelectedIds([]);
+    const selectableReports = reports.filter((r) => r.status !== "RECEIVED");
+    const selectableIds = selectableReports.map((r) => r.id);
+    
+    const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.includes(id));
+    
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !selectableIds.includes(id)));
     } else {
-      setSelectedIds(reports.map((r) => r.id));
+      setSelectedIds(prev => {
+        const newIds = [...prev];
+        selectableIds.forEach(id => {
+          if (!newIds.includes(id)) newIds.push(id);
+        });
+        return newIds;
+      });
     }
   };
 
   const handleSelectRow = (id: number) => {
+    const report = reports.find(r => r.id === id);
+    if (report && report.status === "RECEIVED") return;
+
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -154,7 +188,140 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
 
   // Actions
   const handleViewReport = (report: ReportItem) => {
+    try {
+      const viewedStr = sessionStorage.getItem("viewed_department_reports") || "[]";
+      const viewed = JSON.parse(viewedStr) as Array<number | { id: number; submittedAt: string | null }>;
+      
+      const filtered = viewed.filter((item) => {
+        if (typeof item === "object" && item !== null) {
+          return item.id !== report.id;
+        }
+        return item !== report.id;
+      });
+
+      filtered.push({ id: report.id, submittedAt: report.submittedAt || null });
+      sessionStorage.setItem("viewed_department_reports", JSON.stringify(filtered));
+    } catch (e) {
+      console.error("Error storing viewed report status:", e);
+    }
     setSelectedReport(report);
+  };
+
+  const checkAllSelectedReportsAreViewed = (): boolean => {
+    try {
+      const viewedStr = sessionStorage.getItem("viewed_department_reports") || "[]";
+      const viewed = JSON.parse(viewedStr) as Array<number | { id: number; submittedAt: string | null }>;
+
+      for (const id of selectedIds) {
+        const report = reports.find((r) => r.id === id);
+        if (!report) continue;
+
+        const hasViewed = viewed.some((item) => {
+          if (typeof item === "object" && item !== null) {
+            return item.id === id && item.submittedAt === (report.submittedAt || null);
+          }
+          return item === id;
+        });
+
+        if (!hasViewed) {
+          const bizName = report.businessName;
+          showToast(`Bạn chưa xem chi tiết báo cáo của "${bizName}". Vui lòng click xem chi tiết trước khi duyệt/từ chối!`, "error");
+          return false;
+        }
+      }
+    } catch (e) {
+      console.error("Error checking viewed status:", e);
+    }
+    return true;
+  };
+
+  const handleBulkApproveClick = () => {
+    if (selectedIds.length === 0) return;
+
+    const hasAlreadyReceived = reports.some(r => selectedIds.includes(r.id) && r.status === "RECEIVED");
+    if (hasAlreadyReceived) {
+      showToast("Một hoặc nhiều báo cáo đã được duyệt. Không thể duyệt lại!", "error");
+      return;
+    }
+
+    if (!checkAllSelectedReportsAreViewed()) return;
+    setShowApproveModal(true);
+  };
+
+  const handleConfirmApprove = async () => {
+    const hasAlreadyReceived = reports.some(r => selectedIds.includes(r.id) && r.status === "RECEIVED");
+    if (hasAlreadyReceived) {
+      showToast("Một hoặc nhiều báo cáo đã được duyệt. Không thể duyệt lại!", "error");
+      setShowApproveModal(false);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await bulkReceiveDepartmentReports(selectedIds);
+      if (res.success) {
+        showToast(res.message || "Duyệt báo cáo thành công", "success");
+        setSelectedIds([]);
+        setReloadTrigger(prev => prev + 1);
+      } else {
+        showToast("Duyệt báo cáo thất bại", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Lỗi khi duyệt báo cáo", "error");
+    } finally {
+      setIsSubmitting(false);
+      setShowApproveModal(false);
+    }
+  };
+
+  const handleBulkRejectClick = () => {
+    if (selectedIds.length === 0) return;
+
+    const hasAlreadyReceived = reports.some(r => selectedIds.includes(r.id) && r.status === "RECEIVED");
+    if (hasAlreadyReceived) {
+      showToast("Một hoặc nhiều báo cáo đã được duyệt. Không thể từ chối!", "error");
+      return;
+    }
+
+    if (!checkAllSelectedReportsAreViewed()) return;
+    setRejectReason("");
+    setShowRejectReasonModal(true);
+  };
+
+  const handleRejectReasonSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectReason.trim()) {
+      showToast("Vui lòng nhập lý do từ chối", "error");
+      return;
+    }
+    setShowRejectReasonModal(false);
+    setShowRejectConfirmModal(true);
+  };
+
+  const handleConfirmReject = async () => {
+    const hasAlreadyReceived = reports.some(r => selectedIds.includes(r.id) && r.status === "RECEIVED");
+    if (hasAlreadyReceived) {
+      showToast("Một hoặc nhiều báo cáo đã được duyệt. Không thể từ chối!", "error");
+      setShowRejectConfirmModal(false);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await bulkRejectDepartmentReports(selectedIds, rejectReason);
+      if (res.success) {
+        showToast(res.message || "Từ chối báo cáo thành công", "success");
+        setSelectedIds([]);
+        setReloadTrigger(prev => prev + 1);
+      } else {
+        showToast("Từ chối báo cáo thất bại", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Lỗi khi từ chối báo cáo", "error");
+    } finally {
+      setIsSubmitting(false);
+      setShowRejectConfirmModal(false);
+    }
   };
 
   const handleAggregateReport = () => {
@@ -185,6 +352,24 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
           Báo cáo định kỳ Tai nạn lao động
         </h2>
         <div className="flex items-center gap-3">
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-2 select-none animate-in fade-in slide-in-from-top-1.5 duration-200">
+              <button
+                onClick={handleBulkApproveClick}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs select-none transition-all cursor-pointer shadow-md shadow-emerald-500/10 active:scale-98 disabled:opacity-50"
+              >
+                Duyệt ({selectedIds.length})
+              </button>
+              <button
+                onClick={handleBulkRejectClick}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs select-none transition-all cursor-pointer shadow-md shadow-red-500/10 active:scale-98 disabled:opacity-50"
+              >
+                Từ chối ({selectedIds.length})
+              </button>
+            </div>
+          )}
           {/* Year selector */}
           <div className="relative min-w-[100px]">
             <select
@@ -286,7 +471,12 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
                 <th className="p-4 w-12 text-center">
                   <input
                     type="checkbox"
-                    checked={reports.length > 0 && selectedIds.length === reports.length}
+                    checked={
+                      (() => {
+                        const selectable = reports.filter(r => r.status !== "RECEIVED");
+                        return selectable.length > 0 && selectable.every(r => selectedIds.includes(r.id));
+                      })()
+                    }
                     onChange={handleSelectAll}
                     className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
@@ -352,7 +542,9 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
                   >
                     <option value="">Tất cả</option>
                     <option value="DRAFT">Đang báo cáo</option>
+                    <option value="SUBMITTED">Đang chờ duyệt</option>
                     <option value="RECEIVED">Đã tiếp nhận</option>
+                    <option value="REJECTED">Từ chối phê duyệt</option>
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
                 </td>
@@ -377,7 +569,10 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
                         type="checkbox"
                         checked={selectedIds.includes(report.id)}
                         onChange={() => handleSelectRow(report.id)}
-                        className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        disabled={report.status === "RECEIVED"}
+                        className={`w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-blue-500 ${
+                          report.status === "RECEIVED" ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                        }`}
                       />
                     </td>
                     <td className="p-4 text-center">
@@ -402,14 +597,17 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
                       <span className="inline-flex items-center gap-1.5 select-none">
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            report.status === "RECEIVED" ? "bg-blue-500" : "bg-zinc-400"
+                            report.status === "RECEIVED" ? "bg-blue-500" :
+                            report.status === "SUBMITTED" ? "bg-amber-500 animate-pulse" :
+                            report.status === "REJECTED" ? "bg-red-500 animate-pulse" : "bg-zinc-400"
                           }`}
                         />
                         <span
                           className={
-                            report.status === "RECEIVED"
-                              ? "text-blue-600 dark:text-blue-400"
-                              : "text-zinc-500 dark:text-zinc-400"
+                            report.status === "RECEIVED" ? "text-blue-600 dark:text-blue-400" :
+                            report.status === "SUBMITTED" ? "text-amber-600 dark:text-amber-400" :
+                            report.status === "REJECTED" ? "text-red-500 dark:text-red-400" :
+                            "text-zinc-500 dark:text-zinc-400"
                           }
                         >
                           {report.statusLabel}
@@ -460,6 +658,119 @@ export const DepartmentReports: React.FC<DepartmentReportsProps> = ({ showToast 
           </div>
         </div>
       </div>
+      {/* 1. Modal Xác nhận duyệt */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowApproveModal(false)} />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/80 shadow-2xl rounded-[20px] w-full max-w-[420px] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col dark:border-zinc-800">
+            <div className="bg-emerald-600 dark:bg-emerald-700 text-white py-4 text-center font-bold text-base tracking-wide">
+              Xác nhận duyệt báo cáo
+            </div>
+            <div className="p-6 flex flex-col gap-4 bg-white dark:bg-zinc-950">
+              <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold">
+                Bạn có chắc chắn muốn duyệt {selectedIds.length} báo cáo đã chọn? Sau khi duyệt, doanh nghiệp sẽ không thể chỉnh sửa các báo cáo này.
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowApproveModal(false)}
+                  disabled={isSubmitting}
+                  className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-xs cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmApprove}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Xác nhận</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal Lý do từ chối */}
+      {showRejectReasonModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRejectReasonModal(false)} />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/80 shadow-2xl rounded-[20px] w-full max-w-[480px] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col dark:border-zinc-800">
+            <div className="bg-red-600 dark:bg-red-700 text-white py-4 text-center font-bold text-base tracking-wide">
+              Từ chối báo cáo
+            </div>
+            <form onSubmit={handleRejectReasonSubmit} className="p-6 flex flex-col gap-4 bg-white dark:bg-zinc-950">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                  Lý do từ chối (bắt buộc)
+                </label>
+                <textarea
+                  required
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Nêu rõ lý do từ chối để doanh nghiệp có thể chỉnh sửa chính xác..."
+                  rows={4}
+                  className="w-full text-sm px-3 py-2 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none bg-white dark:bg-zinc-950 text-zinc-800 dark:text-zinc-200 focus:border-red-500 transition-colors font-medium resize-none"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRejectReasonModal(false)}
+                  className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-md transition-all cursor-pointer"
+                >
+                  Gửi yêu cầu từ chối
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal Xác nhận từ chối */}
+      {showRejectConfirmModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRejectConfirmModal(false)} />
+          <div className="relative bg-white dark:bg-zinc-950 border border-zinc-200/80 shadow-2xl rounded-[20px] w-full max-w-[420px] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col dark:border-zinc-800">
+            <div className="bg-red-600 dark:bg-red-700 text-white py-4 text-center font-bold text-base tracking-wide">
+              Xác nhận từ chối báo cáo
+            </div>
+            <div className="p-6 flex flex-col gap-4 bg-white dark:bg-zinc-950">
+              <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed font-semibold">
+                Bạn có chắc chắn muốn từ chối {selectedIds.length} báo cáo đã chọn với lý do đã nhập?
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowRejectConfirmModal(false)}
+                  disabled={isSubmitting}
+                  className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 font-bold text-xs cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  Quay lại
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={isSubmitting}
+                  className="flex items-center gap-1.5 px-4.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Xác nhận từ chối</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

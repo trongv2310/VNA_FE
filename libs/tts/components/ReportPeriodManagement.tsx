@@ -438,7 +438,7 @@ export const ReportPeriodManagement: React.FC<ReportPeriodManagementProps> = ({
       if (checkRes.success && checkRes.data) {
         const existingItems = checkRes.data.items || [];
         const hasDuplicate = existingItems.some(
-          (p) => !editingPeriod || String(p.id) !== String(editingPeriod.id)
+          (p: any) => !editingPeriod || String(p.id) !== String(editingPeriod.id)
         );
         if (hasDuplicate) {
           setFormErrors(prev => ({
