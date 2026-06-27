@@ -187,20 +187,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
     setIsChangeEmailOpen(false);
   };
 
-  const handleOpenChangeEmail = async () => {
-    if (isSendingChangeEmailOtp) return;
-
-    setIsSendingChangeEmailOtp(true);
-    try {
-      const response = await sendChangeGmailOtp();
-      setChangeEmailExpiresInSeconds(response.data?.expiresInSeconds || 60);
-      showToast(String(response.message || "Mã OTP đã được gửi về email hiện tại"), "success");
-      setIsChangeEmailOpen(true);
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không thể gửi OTP đổi email", "error");
-    } finally {
-      setIsSendingChangeEmailOtp(false);
-    }
+  const handleOpenChangeEmail = () => {
+    setIsChangeEmailOpen(true);
   };
 
   return (
